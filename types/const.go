@@ -1,12 +1,16 @@
 package types
 
 const (
+	DDMMYYYY = "02-01-2006"
+	YYMMDD   = "060102"
+	YYMM     = "0601"
+)
+
+const (
 	Pending                    = "pending"
 	InProgress                 = "inProgress"
 	Completed                  = "completed"
 	Failure                    = "failure"
-	DDMMYYYY                   = "02-01-2006"
-	YYMMDD                     = "060102"
 	GroupOld                   = "OLD"
 	GroupNew                   = "NEW"
 	SaleOppStatusNew           = "NEW"

@@ -9,12 +9,17 @@ import (
 	"crm-worker-go/utils"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"time"
 )
 
 var currentTime = time.Now()
 
 type SaleService struct {
+	topicService *TopicService
+	saleRepo     *repositories.SaleOpportunityRepository
+	leadRepo     *repositories.LeadRepository
+	logRepo      *repositories.LogRepository
 }
 
 type PayloadFindOrCreateLead struct {
@@ -28,14 +33,16 @@ type PayloadFindOrCreateLead struct {
 	CreatedBy  string
 }
 
-func NewSaleService() *SaleService {
-	return &SaleService{}
+func NewSaleService(topicService *TopicService, repository *repositories.Repository) *SaleService {
+	return &SaleService{
+		topicService: topicService,
+		leadRepo:     repository.LeadRepo,
+		saleRepo:     repository.SaleRepo,
+		logRepo:      repository.LogRepo,
+	}
 }
 
 func (s *SaleService) ExecuteMessage(messages types.RequestMessageOrder, source string) bool {
-
-	ctx := context.Background()
-
 	order := messages.Order
 	metadata := messages.Metadata
 	images := messages.Images
@@ -45,7 +52,7 @@ func (s *SaleService) ExecuteMessage(messages types.RequestMessageOrder, source 
 	assetType := order.AssetType
 	customerId := order.CustomerId
 
-	lead := findOrCreateLead(ctx, PayloadFindOrCreateLead{
+	lead := s.findOrCreateLead(PayloadFindOrCreateLead{
 		FullName:   customerName,
 		Email:      email,
 		Phone:      phone,
@@ -53,14 +60,12 @@ func (s *SaleService) ExecuteMessage(messages types.RequestMessageOrder, source 
 		Metadata:   metadata,
 		CustomerId: customerId,
 	})
-	utils.Logger.Info(lead)
-	if lead != nil {
-		saleRepo := repositories.NewSaleOpportunityRepository(ctx)
 
-		group := getSaleGroup(ctx, phone, lead)
+	if lead != nil {
+		group := s.getSaleGroup(phone, lead)
 		days := order.Days
 		code := order.Code
-		code = saleRepo.GenerateCode(code)
+		code = s.saleRepo.GenerateCode(code)
 		detail := order.Detail
 		bill := order.Bill
 		createdBy := config.DefaultDataConfig["createdBy"]
@@ -89,31 +94,132 @@ func (s *SaleService) ExecuteMessage(messages types.RequestMessageOrder, source 
 
 		hash := utils.Hash(assets)
 
-		if isExistsHash(hash, saleRepo) {
+		if isExistsHash(hash, s.saleRepo) {
 			return true
 		}
-		entity.Code = saleRepo.GenerateCode(code)
+		entity.Code = s.saleRepo.GenerateCode(code)
 		entity.DisbursedAmount = 0
+		entity.DisbursedAt = nil
 		entity.CreatedBy = createdBy
 		entity.UpdatedBy = createdBy
 		entity.Hash = hash
 		entities.CreatingEntity(&entity.BaseEntity)
 
-		saleOpp, err := saleRepo.BaseRepo.Create(entity)
+		saleOpp, err := s.saleRepo.BaseRepo.Create(entity)
 		if err != nil {
 			return false
 		}
+		s.afterSaleOppCreated(saleOpp)
 
 		// Notification To Customer
-		notification(lead.CustomerId, saleOpp)
-
-		utils.Logger.Info(saleOpp)
+		s.notification(lead.CustomerId, saleOpp)
 	}
 
 	return false
 }
 
-func findOrCreateLead(ctx context.Context, payload PayloadFindOrCreateLead) *entities.Lead {
+func (s *SaleService) disbursed(payload types.PayloadMessageDisbursed) {
+	s.borrowDisbursed(types.PayloadBorrowDisbursed{
+		LoanAmount:     0,
+		ModifiedAmount: 0,
+		ContractCode:   "",
+	})
+
+}
+
+func (s *SaleService) borrowDisbursed(payload types.PayloadBorrowDisbursed) bool {
+	contractCode, loanAmount, modifiedAmount := payload.ContractCode, payload.LoanAmount, payload.ModifiedAmount
+	findOneOptions := options.FindOne()
+	findOneOptions.SetSort(bson.D{{"createdAt", -1}})
+	sale, _ := s.saleRepo.BaseRepo.FindOne(bson.M{"contractCode": contractCode}, &options.FindOneOptions{
+		Sort: bson.M{"disbursedAt": -1},
+	})
+	if sale != nil {
+		currentTime := time.Now()
+		currentMonth := currentTime.Format(types.YYMM)
+		disbursedMonth := sale.DisbursedAt.Format(types.YYMM)
+		if currentMonth != disbursedMonth {
+		_:
+			s.saleRepo.BaseRepo.UpdateByID(sale.ID, bson.M{"disbursedAmount": loanAmount})
+			afterSaleOppUpdated(sale)
+			return true
+		}
+		newSale := sale
+		newSale.DisbursedAmount = modifiedAmount
+		newSale.Code = s.saleRepo.GenerateCode("")
+		newSale.DisbursedAt = &currentTime
+		entities.CreatingEntity(&newSale.BaseEntity)
+		saleOpp, _ := s.saleRepo.BaseRepo.Create(newSale)
+		s.afterSaleOppCreated(saleOpp)
+	}
+
+	return false
+}
+
+func (s *SaleService) createSaleOppDisbursed(ctx context.Context, payload types.PayloadMessageDisbursed) {
+	saleOppCode, lead, saleOpp := payload.SaleOppCode, payload.Lead, payload.SaleOpp
+	description := saleOpp.Description
+	contractCode := saleOpp.ContractCode
+	assetType := saleOpp.AssetType
+	loanTerm := saleOpp.LoanTerm
+	disbursedAmount := saleOpp.DisbursedAmount
+	accountStore := saleOpp.AccountStore
+	createdId := saleOpp.CreatedId
+	demandLoan := saleOpp.DemandLoan
+	disbursedAt := saleOpp.DisbursedAt
+
+	fullName, phone, nationalId, account, customerId, source :=
+		lead.FullName, lead.Phone, lead.NationalId, lead.Account, lead.CustomerId, lead.Source
+
+	disbursedLead := s.findOrCreateLead(PayloadFindOrCreateLead{
+		FullName:   fullName,
+		Phone:      phone,
+		Source:     source,
+		CreatedBy:  account,
+		CustomerId: customerId,
+		NationalId: nationalId,
+	})
+
+	if disbursedLead != nil {
+		entity := &entities.SaleOpportunity{
+			SourceRefs: entities.SourceRefs{
+				Source:     source,
+				RefId:      contractCode,
+				CustomerId: customerId,
+			},
+			Status: types.SaleOppStatusSuccess,
+			Type:   types.SaleOppTypeBorrower,
+			Source: source,
+			Group:  s.getSaleGroup(phone, disbursedLead),
+			Assets: entities.Asset{
+				Description: description,
+				AssetType:   assetType,
+				DemandLoan:  demandLoan,
+				LoanTerm:    loanTerm,
+			},
+			LeadId:          disbursedLead.ID,
+			ContractCode:    contractCode,
+			DisbursedAmount: disbursedAmount,
+			DisbursedAt:     &disbursedAt,
+			EmployeeBy:      createdId,
+			BaseEntity: entities.BaseEntity{
+				CreatedBy: createdId,
+				UpdatedBy: createdId,
+				CreatedAt: disbursedAt,
+				UpdatedAt: disbursedAt,
+			},
+			StoreCode: accountStore,
+			Code:      s.saleRepo.GenerateCode(saleOppCode),
+		}
+
+		saleOppDisbursed, _ := s.saleRepo.BaseRepo.Create(entity)
+		s.afterSaleOppCreated(saleOppDisbursed)
+
+		s.pushEventInternal(saleOppDisbursed)
+	}
+}
+
+func (s *SaleService) findOrCreateLead(payload PayloadFindOrCreateLead) *entities.Lead {
 	fullName := payload.FullName
 	phone := payload.Phone
 	email := payload.Email
@@ -122,9 +228,7 @@ func findOrCreateLead(ctx context.Context, payload PayloadFindOrCreateLead) *ent
 	nationalId := payload.NationalId
 	customerId := payload.CustomerId
 
-	leadRepo := repositories.NewLeadRepository(ctx)
-
-	item, err := leadRepo.BaseRepo.FindOne(bson.D{{"phone", phone}})
+	item, err := s.leadRepo.BaseRepo.FindOne(bson.D{{"phone", phone}}, nil)
 	if err != nil || item == nil {
 		entity := &entities.Lead{
 			FullName:   fullName,
@@ -138,20 +242,18 @@ func findOrCreateLead(ctx context.Context, payload PayloadFindOrCreateLead) *ent
 			},
 		}
 		entities.CreatingEntity(&entity.BaseEntity)
-		item, _ = leadRepo.BaseRepo.Create(entity)
+		item, _ = s.leadRepo.BaseRepo.Create(entity)
 	}
 	return item
 }
 
-func getSaleGroup(ctx context.Context, phone string, lead *entities.Lead) string {
+func (s *SaleService) getSaleGroup(phone string, lead *entities.Lead) string {
 	group := types.GroupNew
 
 	if lead == nil {
-		leadRepo := repositories.NewLeadRepository(ctx)
-		lead, _ = leadRepo.BaseRepo.FindOne(bson.D{{"phone", phone}})
+		lead, _ = s.leadRepo.BaseRepo.FindOne(bson.D{{"phone", phone}}, nil)
 	}
 	if lead != nil {
-		saleRepo := repositories.NewSaleOpportunityRepository(ctx)
 		filter := bson.M{
 			"leadId": lead.ID,
 			"disbursedAt": bson.M{
@@ -164,7 +266,7 @@ func getSaleGroup(ctx context.Context, phone string, lead *entities.Lead) string
 				"$ne": 0,
 			},
 		}
-		sale, err := saleRepo.BaseRepo.FindOne(filter)
+		sale, err := s.saleRepo.BaseRepo.FindOne(filter, nil)
 		if sale != nil && err == nil {
 			group = types.GroupOld
 		}
@@ -190,8 +292,7 @@ func isExistsHash(hash string, saleRepo *repositories.SaleOpportunityRepository)
 	return total != 0
 }
 
-func notification(customerId string, sale *entities.SaleOpportunity) {
-	utils.Logger.Info(customerId)
+func (s *SaleService) notification(customerId string, sale *entities.SaleOpportunity) {
 	if customerId != "" {
 		code := sale.Code
 		status := sale.Status
@@ -211,8 +312,7 @@ func notification(customerId string, sale *entities.SaleOpportunity) {
 			subscriptionType = types.TopicSubscriptionTypeOrderUpdated
 		}
 
-		topicService := NewTopicService()
-		topicService.Send(config.TopicConfig["customerOrderUpdated"], map[string]interface{}{
+		s.topicService.Send(config.TopicConfig["customerOrderUpdated"], map[string]interface{}{
 			"data":      dataNotify,
 			"receivers": []string{customerId},
 		}, map[string]string{
@@ -240,4 +340,28 @@ func getOrderStatusDisplay(status string) string {
 		return ""
 	}
 	return ""
+}
+
+func afterSaleOppUpdated(sale *entities.SaleOpportunity) {
+
+}
+
+func (s *SaleService) afterSaleOppCreated(sale *entities.SaleOpportunity) {
+_:
+	s.logRepo.BaseRepo.Create(&entities.Log{
+		BeforeAttributes:    utils.Omit(sale, []string{"leadId", "sourceRefs", "code", "createdAt", "updatedAt", "ID", "createdBy", "hash"}),
+		AfterAttributes:     nil,
+		SaleOpportunitiesId: sale.ID,
+		CreatedBy:           sale.CreatedBy,
+		CreatedAt:           time.Time{},
+	})
+}
+
+func (s *SaleService) pushEventInternal(saleOpp *entities.SaleOpportunity) {
+	s.topicService.Send(config.TopicConfig["customerOrderUpdated"], map[string]interface{}{
+		"data":      "",
+		"receivers": []string{"customerId"},
+	}, map[string]string{
+		"subscriptionType": "subscriptionType",
+	})
 }

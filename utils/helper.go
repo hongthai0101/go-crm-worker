@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"github.com/golang-jwt/jwt"
 	"math/rand"
@@ -55,4 +56,32 @@ func Shorthand[T string](first T, second T) T {
 		return first
 	}
 	return second
+}
+
+func Pick(input interface{}, fields []string) map[string]interface{} {
+	b, _ := json.Marshal(&input)
+	var m map[string]interface{}
+	_ = json.Unmarshal(b, &m)
+	output := make(map[string]interface{})
+	for k, v := range m {
+		if Contains(fields, k) {
+			output[k] = v
+		}
+	}
+
+	return output
+}
+
+func Omit(input interface{}, fields []string) map[string]interface{} {
+	b, _ := json.Marshal(&input)
+	var m map[string]interface{}
+	_ = json.Unmarshal(b, &m)
+	output := make(map[string]interface{})
+	for k, v := range m {
+		if !Contains(fields, k) {
+			output[k] = v
+		}
+	}
+
+	return output
 }

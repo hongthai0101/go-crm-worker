@@ -10,23 +10,17 @@ import (
 	"net/http"
 )
 
-type FileManagerClient interface {
-	FindExportRequests(ctx context.Context, id string) (*types.IExportRequest, error)
-	UpdateExportRequestFailure(ctx context.Context, id string) error
-	CreateFile(ctx context.Context, exportRequestId string, url string, info interface{}) error
-}
-
-type fileManagerClient struct {
+type FileManagerClient struct {
 	client *Client
 }
 
-func NewFileManagerClient(token string) FileManagerClient {
-	return &fileManagerClient{
+func NewFileManagerClient(token string) *FileManagerClient {
+	return &FileManagerClient{
 		client: NewClient(config.ServiceConfig["fileManagerUrl"], token),
 	}
 }
 
-func (c *fileManagerClient) FindExportRequests(ctx context.Context, id string) (*types.IExportRequest, error) {
+func (c *FileManagerClient) FindExportRequests(ctx context.Context, id string) (*types.IExportRequest, error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/export-requests/%s", c.client.baseURL, id), nil)
 	if err != nil {
 		return nil, err
@@ -41,7 +35,7 @@ func (c *fileManagerClient) FindExportRequests(ctx context.Context, id string) (
 	return &res, nil
 }
 
-func (c *fileManagerClient) UpdateExportRequestFailure(ctx context.Context, id string) error {
+func (c *FileManagerClient) UpdateExportRequestFailure(ctx context.Context, id string) error {
 	update, _ := json.Marshal(map[string]string{"status": "failure"})
 
 	req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/export-requests/%s", c.client.baseURL, id), bytes.NewBuffer(update))
@@ -57,7 +51,7 @@ func (c *fileManagerClient) UpdateExportRequestFailure(ctx context.Context, id s
 	return nil
 }
 
-func (c *fileManagerClient) CreateFile(
+func (c *FileManagerClient) CreateFile(
 	ctx context.Context,
 	exportRequestId string,
 	url string,

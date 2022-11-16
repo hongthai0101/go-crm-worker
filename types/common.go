@@ -62,3 +62,41 @@ type RequestMessageOrder struct {
 	Metadata interface{}   `json:"metadata"`
 	Images   []interface{} `json:"images"`
 }
+
+type PayloadBorrowDisbursed struct {
+	LoanAmount     int    `json:"loanAmount"`
+	ModifiedAmount int    `json:"modifiedAmount"`
+	ContractCode   string `json:"contractCode"`
+}
+
+type PayloadMessageDisbursed struct {
+	SaleOppCode     string                  `json:"saleOppCode"`
+	LoanPackageCode string                  `json:"loanPackageCode"`
+	Lead            MessageDisbursedLead    `json:"lead"`
+	SaleOpp         MessageDisbursedSaleOpp `json:"saleOpp"`
+	ContractCode    string                  `json:"contractCode"`
+	IsManual        bool                    `json:"isManual"`
+}
+
+type MessageDisbursedLead struct {
+	FullName     string `json:"fullName"`
+	Phone        string `json:"phone"`
+	NationalId   string `json:"nationalId"`
+	Account      string `json:"account"`
+	AccountStore string `json:"accountStore"`
+	CustomerId   string `json:"customerId"`
+	Source       string `json:"source"`
+}
+
+type MessageDisbursedSaleOpp struct {
+	Description     string    `json:"description"`
+	ContractCode    string    `json:"contractCode"`
+	AssetType       string    `json:"assetType"`
+	LoanTerm        string    `json:"loanTerm"`
+	DisbursedAmount int       `json:"disbursedAmount"`
+	AccountStore    string    `json:"accountStore"`
+	CreatedId       string    `json:"createdId"`
+	Account         string    `json:"account"`
+	DemandLoan      int       `json:"demandLoan"`
+	DisbursedAt     time.Time `json:"disbursedAt"`
+}

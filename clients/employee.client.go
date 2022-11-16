@@ -10,21 +10,17 @@ import (
 	"net/http"
 )
 
-type EmployeeClient interface {
-	GetEmployees(ctx context.Context, ids []string) (*map[string]string, error)
-}
-
-type employeeClient struct {
+type EmployeeClient struct {
 	client *Client
 }
 
-func NewEmployeeClient(token string) EmployeeClient {
-	return &employeeClient{
+func NewEmployeeClient(token string) *EmployeeClient {
+	return &EmployeeClient{
 		client: NewClient(config.ServiceConfig["employeeUrl"], token),
 	}
 }
 
-func (c *employeeClient) findByIds(ctx context.Context, ids []string) ([]*types.IEmployee, error) {
+func (c *EmployeeClient) findByIds(ctx context.Context, ids []string) ([]*types.IEmployee, error) {
 	postBody, _ := json.Marshal(map[string][]string{
 		"ids": ids,
 	})
@@ -42,7 +38,7 @@ func (c *employeeClient) findByIds(ctx context.Context, ids []string) ([]*types.
 	return employees, nil
 }
 
-func (c *employeeClient) GetEmployees(ctx context.Context, ids []string) (*map[string]string, error) {
+func (c *EmployeeClient) GetEmployees(ctx context.Context, ids []string) (*map[string]string, error) {
 	employees, _ := c.findByIds(ctx, ids)
 	result := make(map[string]string, len(ids))
 	for i := 0; i < len(employees); i++ {

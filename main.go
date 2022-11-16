@@ -4,7 +4,7 @@ import (
 	"context"
 	"crm-worker-go/config"
 	"crm-worker-go/datasources"
-	"crm-worker-go/subscriptions"
+	"crm-worker-go/services"
 	"crm-worker-go/utils"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -23,7 +23,15 @@ func init() {
 }
 
 func main() {
+	wait := make(chan int)
+
 	defer datasources.Close(mongoClient, ctx, cancel)
 
-	subscriptions.Boot()
+	srv := initServer(services.Token)
+_:
+	srv.Run()
+
+	<-wait
+
+	//subscriptions.Boot()
 }

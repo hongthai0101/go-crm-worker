@@ -2,6 +2,7 @@ package entities
 
 import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"time"
 )
 
 const CollectionSaleOpportunities = "SaleOpportunities"
@@ -36,7 +37,7 @@ type SaleOpportunity struct {
 	Assets          Asset              `bson:"assets" json:"assets"`
 	EmployeeBy      string             `bson:"employeeBy" json:"employeeBy,omitempty"`
 	StoreCode       string             `bson:"storeCode" json:"storeCode,omitempty"`
-	DisbursedAt     interface{}        `bson:"disbursedAt" json:"disbursedAt,omitempty"`
+	DisbursedAt     *time.Time         `bson:"disbursedAt" json:"disbursedAt,omitempty"`
 	ContractCode    string             `bson:"contractCode" json:"contractCode,omitempty"`
 	Tags            []string           `bson:"tags" json:"tags,omitempty"`
 	DisbursedAmount int                `bson:"disbursedAmount" json:"disbursedAmount,omitempty"`

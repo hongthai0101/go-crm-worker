@@ -20,14 +20,26 @@ import (
 
 const Token = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJhS2FrTGt1dEtsVDlTNUtqWnZ3dmZrMVdyd01nS2pFZTFFbE9BeTlOU1ZJIn0.eyJleHAiOjE2NjY3NzEyODksImlhdCI6MTY2Njc3MDk4OSwianRpIjoiZjk4MDM3ZjktODViZS00NTA0LTk3NWEtYTQ4MmMxYzUwZmJhIiwiaXNzIjoiaHR0cHM6Ly9pZC1kZXYudmlldG1vbmV5LnZuL2F1dGgvcmVhbG1zL2FwcCIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiJmNjg3ZmU4My1lMjJlLTQ4NmMtYjg2OC00YThjZjI2ZGZiZmEiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJtb2JpbGUtYXBwIiwic2Vzc2lvbl9zdGF0ZSI6ImUwNWI3ZTNkLWZjNWMtNDgxOC1iOTk3LTBkMzhkMTdlZmUwMCIsImFjciI6IjEiLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoicHJvZmlsZSBlbWFpbCIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiIwOTA5MjYxNTQxIn0.TstAAY8m9kdDd1nVGlDwdnLWJgX865ezMishk-QC_VtJAOHJBvAHm6wKNvXnloeyDo6aBycsCDQ4hg8-bmdiAWgM9yzEEScga7R-f5lu0i1Nirz2w53k2tAEACmW5Qrj4x0oKcbiX8LqQObkqIDK2U5OaUbKP6bgwkLXqWK3Xjs9zUOeLDNc0NNV8jSTIAgVwMlTvy5CUMFd3x1a71utW-dS1UrzeRqweVb4SLl-ml0ov0BOwgJD25wrR9zpjYES6tEM-rlVvqkStIVAcDbbMkTJjMt-9CW3GkLj5xpNzeaJTMJgUXFd67fpQqg1ZT7cB4xB4fqr99w5Slsb_WFYcQ"
 
-type ExportService interface {
-	ExportSaleOpp(payload types.PayloadMessageExport) bool
+type ExportService struct {
+	fileManagerClient *clients.FileManagerClient
+	employeeClient    *clients.EmployeeClient
+	masterDataClient  *clients.MasterDataClient
+	saleRepo          *repositories.SaleOpportunityRepository
+	leadRepo          *repositories.LeadRepository
+	tagRepo           *repositories.TagRepository
+	noteRepo          *repositories.NoteRepository
 }
 
-type exportService struct{}
-
-func NewExportService() ExportService {
-	return &exportService{}
+func NewExportService(client *clients.HttpClient, repository *repositories.Repository) *ExportService {
+	return &ExportService{
+		fileManagerClient: client.FileManagerClient,
+		employeeClient:    client.EmployeeClient,
+		masterDataClient:  client.MasterDataClient,
+		saleRepo:          repository.SaleRepo,
+		leadRepo:          repository.LeadRepo,
+		tagRepo:           repository.TagRepo,
+		noteRepo:          repository.NoteRepo,
+	}
 }
 
 type getDataDB struct {
@@ -52,14 +64,12 @@ type iJobs struct {
 	employees  *map[string]string
 }
 
-func (s *exportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
+func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 	var wg = sync.WaitGroup{}
 	wg.Add(3)
 
 	ctx := context.Background()
-
-	fileManagerClient := clients.NewFileManagerClient(payload.Token)
-	exportRequest, err := fileManagerClient.FindExportRequests(ctx, payload.ID)
+	exportRequest, err := s.fileManagerClient.FindExportRequests(ctx, payload.ID)
 
 	if err != nil {
 		log.Fatal("Get Export Request Failure", err)
@@ -68,8 +78,6 @@ func (s *exportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 	if utils.Contains([]string{types.Completed, types.Failure}, exportRequest.Status) {
 		return true
 	}
-
-	saleRepo := repositories.NewSaleOpportunityRepository(ctx)
 
 	requestData := exportRequest.Data
 	start, _ := time.Parse(types.DDMMYYYY, requestData.Start)
@@ -114,7 +122,7 @@ func (s *exportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 		})
 	}
 
-	results, _ := saleRepo.BaseRepo.Find(filter, nil)
+	results, _ := s.saleRepo.BaseRepo.Find(filter, nil)
 	if len(results) == 0 {
 		return true
 	}
@@ -130,20 +138,19 @@ func (s *exportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 
 	var items getDataDB
 	go func() {
-		items = getDataDatabase(ctx, saleIds, leadIds)
+		items = s.getDataDatabase(ctx, saleIds, leadIds)
 		wg.Done()
 	}()
 
-	employeeClient := clients.NewEmployeeClient(payload.Token)
 	var employees *map[string]string
 	go func(ctx context.Context) {
-		employees, _ = employeeClient.GetEmployees(ctx, employeeIds)
+		employees, _ = s.employeeClient.GetEmployees(ctx, employeeIds)
 		wg.Done()
 	}(ctx)
 
 	var masterData iMasterData
 	go func(ctx context.Context) {
-		masterData = getMasterData(ctx, payload.Token)
+		masterData = s.getMasterData(ctx, payload.Token)
 		wg.Done()
 	}(ctx)
 	wg.Wait()
@@ -267,7 +274,7 @@ func handleData(
 	}
 }
 
-func getMasterData(ctx context.Context, token string) iMasterData {
+func (s *ExportService) getMasterData(ctx context.Context, token string) iMasterData {
 	var result []map[string]string
 
 	var wg = sync.WaitGroup{}
@@ -275,39 +282,38 @@ func getMasterData(ctx context.Context, token string) iMasterData {
 
 	var assetTypes, sources, statuses, dataTypes, provinces, groups *map[string]string
 
-	masterDataClient := clients.NewMasterDataClient(token)
 	go func(ctx context.Context) {
-		assetTypes = masterDataClient.GetAssetType(ctx)
+		assetTypes = s.masterDataClient.GetAssetType(ctx)
 		result = append(result, *assetTypes)
 		wg.Done()
 	}(ctx)
 
 	go func(ctx context.Context) {
-		sources = masterDataClient.GetSource(ctx)
+		sources = s.masterDataClient.GetSource(ctx)
 		result = append(result, *sources)
 		wg.Done()
 	}(ctx)
 
 	go func(ctx context.Context) {
-		statuses = masterDataClient.GetStatuses(ctx)
+		statuses = s.masterDataClient.GetStatuses(ctx)
 		result = append(result, *statuses)
 		wg.Done()
 	}(ctx)
 
 	go func(ctx context.Context) {
-		dataTypes = masterDataClient.GetTypes(ctx)
+		dataTypes = s.masterDataClient.GetTypes(ctx)
 		result = append(result, *dataTypes)
 		wg.Done()
 	}(ctx)
 
 	go func(ctx context.Context) {
-		groups = masterDataClient.GetGroups(ctx)
+		groups = s.masterDataClient.GetGroups(ctx)
 		result = append(result, *groups)
 		wg.Done()
 	}(ctx)
 
 	go func(ctx context.Context) {
-		provinces = masterDataClient.GetProvinces(ctx)
+		provinces = s.masterDataClient.GetProvinces(ctx)
 		result = append(result, *provinces)
 		wg.Done()
 	}(ctx)
@@ -324,17 +330,13 @@ func getMasterData(ctx context.Context, token string) iMasterData {
 	}
 }
 
-func getDataDatabase(
+func (s *ExportService) getDataDatabase(
 	ctx context.Context,
 	saleIds []primitive.ObjectID,
 	leadIds []primitive.ObjectID,
 ) getDataDB {
 	var wg = sync.WaitGroup{}
 	wg.Add(3)
-
-	leadRepo := repositories.NewLeadRepository(ctx)
-	tagRepo := repositories.NewTagRepository(ctx)
-	noteRepo := repositories.NewNoteRepository(ctx)
 
 	var (
 		leads = make(map[string]*entities.Lead)
@@ -353,7 +355,7 @@ func getDataDatabase(
 			{"province", 1},
 			{"_id", 1},
 		})
-		items, _ := leadRepo.BaseRepo.Find(bson.M{
+		items, _ := s.leadRepo.BaseRepo.Find(bson.M{
 			"_id": bson.M{
 				"$in": leadIds,
 			},
@@ -371,7 +373,7 @@ func getDataDatabase(
 			{"name", 1},
 			{"code", 1},
 		})
-		items, _ := tagRepo.BaseRepo.Find(bson.M{}, findOptions)
+		items, _ := s.tagRepo.BaseRepo.Find(bson.M{}, findOptions)
 		for _, item := range items {
 			tags[item.Code] = item
 		}
@@ -382,7 +384,7 @@ func getDataDatabase(
 		findOptions := options.Find()
 		findOptions.SetSort(bson.D{{"createdAt", -1}})
 		findOptions.SetProjection(bson.D{{"content", 1}, {"_id", 1}})
-		items, _ := noteRepo.BaseRepo.Find(bson.M{
+		items, _ := s.noteRepo.BaseRepo.Find(bson.M{
 			"saleOpportunitiesId": bson.M{
 				"$in": saleIds,
 			},

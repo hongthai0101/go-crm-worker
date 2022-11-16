@@ -32,10 +32,10 @@ func (r *BaseRepository[T]) Count(filter interface{}) (int64, error) {
 	return total, nil
 }
 
-func (r *BaseRepository[T]) FindOne(filter interface{}) (*T, error) {
+func (r *BaseRepository[T]) FindOne(filter interface{}, opts *options.FindOneOptions) (*T, error) {
 	var item *T
 
-	cursor := r.col.FindOne(r.ctx, filter)
+	cursor := r.col.FindOne(r.ctx, filter, opts)
 	if cursor.Err() != nil {
 		return nil, nil
 	}
@@ -62,7 +62,7 @@ func (r *BaseRepository[T]) Create(entity *T) (*T, error) {
 
 func (r *BaseRepository[T]) UpdateByID(
 	Id primitive.ObjectID,
-	payload bson.D,
+	payload bson.M,
 ) (*T, error) {
 	_, err := r.col.UpdateByID(r.ctx, Id, bson.D{{
 		"$set", payload,

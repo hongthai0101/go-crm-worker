@@ -27,7 +27,7 @@ func NewSaleOpportunityRepository(ctx context.Context) *SaleOpportunityRepositor
 
 func (r *SaleOpportunityRepository) GenerateCode(code string) string {
 	if code != "" {
-		sale, _ := r.BaseRepo.FindOne(bson.M{"code": code})
+		sale, _ := r.BaseRepo.FindOne(bson.M{"code": code}, nil)
 		if sale == nil {
 			return code
 		}

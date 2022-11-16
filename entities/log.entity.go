@@ -15,9 +15,9 @@ type AfterAttributes struct {
 
 type Log struct {
 	ID                  primitive.ObjectID `bson:"_id,omitempty" json:"ID,omitempty"`
-	BeforeAttributes    BeforeAttributes   `bson:"beforeAttributes" json:"beforeAttributes"`
-	AfterAttributes     AfterAttributes    `bson:"afterAttributes" json:"afterAttributes"`
-	SaleOpportunitiesId string             `bson:"saleOpportunitiesId" json:"saleOpportunitiesId,omitempty"`
+	BeforeAttributes    interface{}        `bson:"beforeAttributes" json:"beforeAttributes"`
+	AfterAttributes     interface{}        `bson:"afterAttributes" json:"afterAttributes"`
+	SaleOpportunitiesId primitive.ObjectID `bson:"saleOpportunitiesId" json:"saleOpportunitiesId,omitempty"`
 	CreatedBy           string             `bson:"createdBy" json:"createdBy,omitempty"`
 	CreatedAt           time.Time          `bson:"createdAt" json:"createdAt,omitempty"`
 }

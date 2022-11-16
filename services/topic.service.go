@@ -8,17 +8,13 @@ import (
 	"encoding/json"
 )
 
-type TopicService interface {
-	Send(topicName string, body interface{}, attributes map[string]string) bool
+type TopicService struct{}
+
+func NewTopicService() *TopicService {
+	return &TopicService{}
 }
 
-type topicService struct{}
-
-func NewTopicService() TopicService {
-	return &topicService{}
-}
-
-func (s *topicService) Send(topicName string, body interface{}, attributes map[string]string) bool {
+func (s *TopicService) Send(topicName string, body interface{}, attributes map[string]string) bool {
 
 	utils.Logger.Info(body, attributes)
 
