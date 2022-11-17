@@ -19,7 +19,7 @@ func (s *TopicService) Send(topicName string, body interface{}, attributes map[s
 	utils.Logger.Info(body, attributes)
 
 	ctx := context.Background()
-	projectID := config.GCSConfig["projectId"]
+	projectID := config.GetConfig().GCSConfig.ProjectId
 	client, err := pubsub.NewClient(ctx, projectID)
 	if err != nil {
 

@@ -16,7 +16,7 @@ type EmployeeClient struct {
 
 func NewEmployeeClient(token string) *EmployeeClient {
 	return &EmployeeClient{
-		client: NewClient(config.ServiceConfig["employeeUrl"], token),
+		client: NewClient(config.GetConfig().ServiceConfig.EmployeeUrl, token),
 	}
 }
 

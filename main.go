@@ -32,6 +32,4 @@ _:
 	srv.Run()
 
 	<-wait
-
-	//subscriptions.Boot()
 }

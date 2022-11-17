@@ -19,7 +19,7 @@ type SaleOpportunityRepository struct {
 func NewSaleOpportunityRepository(ctx context.Context) *SaleOpportunityRepository {
 	return &SaleOpportunityRepository{
 		BaseRepo: &BaseRepository[entities.SaleOpportunity]{
-			col: datasources.MongoClient.Database(config.GetConfigDB().Name).Collection(entities.CollectionSaleOpportunities),
+			col: datasources.MongoClient.Database(config.GetConfig().DB.Name).Collection(entities.CollectionSaleOpportunities),
 			ctx: ctx,
 		},
 	}

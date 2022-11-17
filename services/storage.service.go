@@ -28,8 +28,8 @@ func NewStorageService(uploadPath string) StorageService {
 	}
 	return &clientUploader{
 		client,
-		config.GCSConfig["projectId"],
-		config.GCSConfig["buket"],
+		config.GetConfig().GCSConfig.ProjectId,
+		config.GetConfig().GCSConfig.Buket,
 		uploadPath,
 	}
 }

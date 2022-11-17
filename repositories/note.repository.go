@@ -14,7 +14,7 @@ type NoteRepository struct {
 func NewNoteRepository(ctx context.Context) *NoteRepository {
 	return &NoteRepository{
 		BaseRepo: &BaseRepository[entities.Note]{
-			col: datasources.MongoClient.Database(config.GetConfigDB().Name).Collection(entities.CollectionNote),
+			col: datasources.MongoClient.Database(config.GetConfig().DB.Name).Collection(entities.CollectionNote),
 			ctx: ctx,
 		},
 	}

@@ -14,7 +14,7 @@ type TagRepository struct {
 func NewTagRepository(ctx context.Context) *TagRepository {
 	return &TagRepository{
 		BaseRepo: &BaseRepository[entities.Tag]{
-			col: datasources.MongoClient.Database(config.GetConfigDB().Name).Collection(entities.CollectionTag),
+			col: datasources.MongoClient.Database(config.GetConfig().DB.Name).Collection(entities.CollectionTag),
 			ctx: ctx,
 		},
 	}

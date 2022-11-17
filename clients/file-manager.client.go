@@ -16,7 +16,7 @@ type FileManagerClient struct {
 
 func NewFileManagerClient(token string) *FileManagerClient {
 	return &FileManagerClient{
-		client: NewClient(config.ServiceConfig["fileManagerUrl"], token),
+		client: NewClient(config.GetConfig().ServiceConfig.FileManagerUrl, token),
 	}
 }
 

@@ -14,7 +14,7 @@ type LeadRepository struct {
 func NewLeadRepository(ctx context.Context) *LeadRepository {
 	return &LeadRepository{
 		BaseRepo: &BaseRepository[entities.Lead]{
-			col: datasources.MongoClient.Database(config.GetConfigDB().Name).Collection(entities.CollectionLead),
+			col: datasources.MongoClient.Database(config.GetConfig().DB.Name).Collection(entities.CollectionLead),
 			ctx: ctx,
 		},
 	}

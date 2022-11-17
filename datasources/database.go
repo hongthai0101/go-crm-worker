@@ -23,12 +23,12 @@ func ConnectDB() (*mongo.Client, context.Context, context.CancelFunc, error) {
 		},
 	}
 
-	dbHost := config.GetConfigDB().Host
-	dbPort := config.GetConfigDB().Port
-	dbUser := config.GetConfigDB().User
-	dbPass := config.GetConfigDB().Pass
-	dbName := config.GetConfigDB().Name
-	dbDebug := config.GetConfigDB().Debug
+	dbHost := config.GetConfig().DB.Host
+	dbPort := config.GetConfig().DB.Port
+	dbUser := config.GetConfig().DB.User
+	dbPass := config.GetConfig().DB.Pass
+	dbName := config.GetConfig().DB.Name
+	dbDebug := config.GetConfig().DB.Debug
 
 	mongoURI := fmt.Sprintf("mongodb://%v:%v@%v:%v/?authSource=%v", dbUser, dbPass, dbHost, dbPort, dbName)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

@@ -14,6 +14,7 @@ import (
 )
 
 var currentTime = time.Now()
+var createdBy = config.GetConfig().DefaultDataConfig.CreatedBy
 
 type SaleService struct {
 	topicService *TopicService
@@ -68,7 +69,6 @@ func (s *SaleService) ExecuteMessage(messages types.RequestMessageOrder, source 
 		code = s.saleRepo.GenerateCode(code)
 		detail := order.Detail
 		bill := order.Bill
-		createdBy := config.DefaultDataConfig["createdBy"]
 		id := order.Id
 
 		assets := entities.Asset{
@@ -312,7 +312,7 @@ func (s *SaleService) notification(customerId string, sale *entities.SaleOpportu
 			subscriptionType = types.TopicSubscriptionTypeOrderUpdated
 		}
 
-		s.topicService.Send(config.TopicConfig["customerOrderUpdated"], map[string]interface{}{
+		s.topicService.Send(config.GetConfig().TopicConfig.CustomerOrderUpdated, map[string]interface{}{
 			"data":      dataNotify,
 			"receivers": []string{customerId},
 		}, map[string]string{
@@ -358,7 +358,7 @@ _:
 }
 
 func (s *SaleService) pushEventInternal(saleOpp *entities.SaleOpportunity) {
-	s.topicService.Send(config.TopicConfig["customerOrderUpdated"], map[string]interface{}{
+	s.topicService.Send(config.GetConfig().TopicConfig.CustomerOrderUpdated, map[string]interface{}{
 		"data":      "",
 		"receivers": []string{"customerId"},
 	}, map[string]string{

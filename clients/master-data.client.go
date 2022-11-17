@@ -14,7 +14,7 @@ type MasterDataClient struct {
 
 func NewMasterDataClient(token string) *MasterDataClient {
 	return &MasterDataClient{
-		client: NewClient(config.ServiceConfig["masterDataUrl"], token),
+		client: NewClient(config.GetConfig().ServiceConfig.MasterDataUrl, token),
 	}
 }
 

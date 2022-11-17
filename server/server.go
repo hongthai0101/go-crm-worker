@@ -26,11 +26,11 @@ func NewServer(
 }
 
 func (s *Server) Run() error {
+	println("Start Server")
 
 	subscription := subscriptions.NewSubscription(s.Service)
 	subscription.Boot()
 
-	println("Start Server")
 	return nil
 }
 

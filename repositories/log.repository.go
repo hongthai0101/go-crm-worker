@@ -14,7 +14,7 @@ type LogRepository struct {
 func NewLogRepository(ctx context.Context) *LogRepository {
 	return &LogRepository{
 		BaseRepo: &BaseRepository[entities.Log]{
-			col: datasources.MongoClient.Database(config.GetConfigDB().Name).Collection(entities.CollectionLog),
+			col: datasources.MongoClient.Database(config.GetConfig().DB.Name).Collection(entities.CollectionLog),
 			ctx: ctx,
 		},
 	}

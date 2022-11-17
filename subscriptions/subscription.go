@@ -28,9 +28,9 @@ var (
 	ctx    context.Context
 )
 
-func (s *Subscription) pullMessages(subscription config.SubscriptionConfigItem) error {
+func (s *Subscription) pullMessages(subscription *config.SubscriptionConfigItem) error {
 	if client == nil {
-		projectID := config.GCSConfig["projectId"]
+		projectID := config.GetConfig().GCSConfig.ProjectId
 		ctx = context.Background()
 		client, err = pubsub.NewClient(ctx, projectID)
 		if err != nil {
@@ -62,6 +62,8 @@ func (s *Subscription) pullMessages(subscription config.SubscriptionConfigItem) 
 	// Receive blocks until the context is cancelled or an error occurs.
 	err = sub.Receive(ctx, func(_ context.Context, msg *pubsub.Message) {
 		atomic.AddUint32(&received, 1)
+
+		utils.Logger.Info(string(msg.Data), msg.Attributes)
 
 		var isDone bool
 		switch subscription.Action {
@@ -100,12 +102,12 @@ func (s *Subscription) pullMessages(subscription config.SubscriptionConfigItem) 
 }
 
 func (s *Subscription) Boot() {
-	//for _, item := range config.SubscriptionConfig {
-	//	if err = pullMessages(item); err != nil {
-	//		utils.Logger.Error(err)
-	//	}
-	//	println(item.Key)
-	//}
+	for _, item := range config.GetConfig().SubscriptionConfig {
+		if err = s.pullMessages(item); err != nil {
+			utils.Logger.Error(err)
+		}
+		println(item.Key)
+	}
 
 	payload := types.RequestMessageOrder{
 		Order: types.RequestOrder{
