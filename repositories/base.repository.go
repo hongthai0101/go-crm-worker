@@ -86,3 +86,18 @@ func (r *BaseRepository[T]) Delete(filter bson.D) (bool, error) {
 	}
 	return true, nil
 }
+
+func (r *BaseRepository[T]) FindById(Id primitive.ObjectID) (*T, error) {
+	var item *T
+
+	cursor := r.col.FindOne(r.ctx, bson.M{"_id": Id}, nil)
+	if cursor.Err() != nil {
+		return nil, nil
+	}
+
+	if err := cursor.Decode(&item); err != nil {
+		panic(err)
+	}
+
+	return item, nil
+}

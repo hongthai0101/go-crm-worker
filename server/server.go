@@ -5,6 +5,7 @@ import (
 	"crm-worker-go/repositories"
 	"crm-worker-go/services"
 	"crm-worker-go/subscriptions"
+	"crm-worker-go/types"
 )
 
 type Server struct {
@@ -25,13 +26,19 @@ func NewServer(
 	}
 }
 
-func (s *Server) Run() error {
+func (s *Server) Run() {
 	println("Start Server")
+
+	payload := types.PayloadBorrowDisbursed{
+		LoanAmount:     6000000,
+		ModifiedAmount: 2000000,
+		ContractCode:   "CLLQ01129691",
+	}
+
+	s.Service.SaleService.Disbursed(payload)
 
 	subscription := subscriptions.NewSubscription(s.Service)
 	subscription.Boot()
-
-	return nil
 }
 
 func (s *Server) Close() error {

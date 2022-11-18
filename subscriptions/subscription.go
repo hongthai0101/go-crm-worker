@@ -9,8 +9,6 @@ import (
 	"crm-worker-go/utils"
 	"encoding/json"
 	"fmt"
-	"sync/atomic"
-	"time"
 )
 
 type Subscription struct {
@@ -38,92 +36,73 @@ func (s *Subscription) pullMessages(subscription *config.SubscriptionConfigItem)
 		}
 	}
 
-	defer client.Close()
+	defer func(client *pubsub.Client) {
+		err := client.Close()
+		if err != nil {
+
+		}
+	}(client)
 
 	sub := client.Subscription(subscription.Key)
-	// Must set ReceiveSettings.Synchronous to false (or leave as default) to enable
-	// concurrency pulling of messages. Otherwise, NumGoroutines will be set to 1.
-	sub.ReceiveSettings.Synchronous = false
-	// NumGoroutines determines the number of goroutines sub.Receive will spawn to pull
-	// messages.
-	sub.ReceiveSettings.NumGoroutines = 16
-	// MaxOutstandingMessages limits the number of concurrent handlers of messages.
-	// In this case, up to 8 unacked messages can be handled concurrently.
-	// Note, even in synchronous mode, messages pulled in a batch can still be handled
-	// concurrently.
-	sub.ReceiveSettings.MaxOutstandingMessages = 8
-
-	// Receive messages for 10 seconds, which simplifies testing. Comment this out in
-	// production, since `Receive` should be used as a long running operation.
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	var received uint32
+	// MaxOutstandingMessages is the maximum number of unprocessed messages the
+	// subscriber client will pull from the server before pausing. This also configures
+	// the maximum number of concurrent handlers for received messages.
+	//
+	// For more information, see https://cloud.google.com/pubsub/docs/pull#streamingpull_dealing_with_large_backlogs_of_small_messages.
+	sub.ReceiveSettings.MaxOutstandingMessages = 100
+	// MaxOutstandingBytes is the maximum size of unprocessed messages,
+	// that the subscriber client will pull from the server before pausing.
+	sub.ReceiveSettings.MaxOutstandingBytes = 1e8
 	// Receive blocks until the context is cancelled or an error occurs.
-	err = sub.Receive(ctx, func(_ context.Context, msg *pubsub.Message) {
-		atomic.AddUint32(&received, 1)
 
-		utils.Logger.Info(string(msg.Data), msg.Attributes)
+	err = sub.Receive(ctx, func(_ context.Context, msg *pubsub.Message) {
+		utils.Logger.Info("Data: ", string(msg.Data), "Attributes: ", msg.Attributes)
 
 		var isDone bool
 		switch subscription.Action {
 		case "ExportCrm":
-			var payload types.PayloadMessageExport
-			if err := json.Unmarshal(msg.Data, &payload); err != nil {
-				utils.Logger.Error(err)
-			}
+			var payload = unmarshalMessage[types.PayloadMessageExport](msg)
 			isDone = s.exportService.ExportSaleOpp(payload)
 			break
 		case "OrderCreated":
-			var payload types.RequestMessageOrder
-			if err := json.Unmarshal(msg.Data, &payload); err != nil {
-				utils.Logger.Error(err)
-			}
+			var payload = unmarshalMessage[types.RequestMessageOrder](msg)
 			isDone = s.saleService.ExecuteMessage(payload, msg.Attributes["source"])
 			break
 		case "OrderDisbursed":
-			var payload types.RequestMessageOrder
-			if err := json.Unmarshal(msg.Data, &payload); err != nil {
-				utils.Logger.Error(err)
-			}
+			var payload = unmarshalMessage[types.RequestMessageOrder](msg)
 			isDone = s.saleService.ExecuteMessage(payload, msg.Attributes["source"])
 			break
 		}
-		if isDone {
-			msg.Ack()
-		} else {
-			msg.Nack()
-		}
-
+		println(isDone)
+		msg.Ack()
+		//if isDone {
+		//	msg.Ack()
+		//} else {
+		//	msg.Nack()
+		//}
 	})
-	fmt.Printf("Received %d messages\n", received)
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Received 1 messages of subscription %v \n", subscription.Key)
 
 	return nil
 }
 
 func (s *Subscription) Boot() {
-	for _, item := range config.GetConfig().SubscriptionConfig {
-		if err = s.pullMessages(item); err != nil {
-			utils.Logger.Error(err)
-		}
-		println(item.Key)
-	}
+	//for _, item := range config.GetConfig().SubscriptionConfig {
+	//	if err = s.pullMessages(item); err != nil {
+	//		utils.Logger.Error(err)
+	//	}
+	//}
+}
 
-	payload := types.RequestMessageOrder{
-		Order: types.RequestOrder{
-			CustomerName: "Long Vu Dai",
-			Email:        "0984536485@gmail.com",
-			Phone:        "0984536485",
-			AssetType:    "KHC",
-			Detail:       "khong co chi",
-			Days:         "30",
-			Bill:         0,
-			Id:           "123",
-			CreatedBy:    "0c33cbf8-6212-4454-8e6d-99807b9c3f1d",
-			CustomerId:   "0c33cbf8-6212-4454-8e6d-99807b9c3f1d",
-		},
-		Metadata: nil,
-		Images:   []interface{}{"a"},
+func unmarshalMessage[T interface{}](msg *pubsub.Message) T {
+	var payload T
+	if err := json.Unmarshal(msg.Data, &payload); err != nil {
+		utils.Logger.Error(err)
 	}
-	s.saleService.ExecuteMessage(payload, "MOBILE")
+	return payload
 }

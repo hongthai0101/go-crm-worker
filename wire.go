@@ -11,7 +11,7 @@ import (
 	"github.com/google/wire"
 )
 
-func initServer(string2 string) *server.Server {
+func initServer() *server.Server {
 	wire.Build(
 		repositories.ProviderRepositorySet,
 		clients.ProviderHttpClientSet,

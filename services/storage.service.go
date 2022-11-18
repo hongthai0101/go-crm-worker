@@ -4,14 +4,14 @@ import (
 	"cloud.google.com/go/storage"
 	"context"
 	"crm-worker-go/config"
-	"fmt"
+	"crm-worker-go/utils"
 	"io"
 	"log"
 	"time"
 )
 
 type StorageService interface {
-	UploadFile(file io.Reader, object string) error
+	UploadFile(file io.Reader, object string) (*storage.Writer, error)
 }
 
 type clientUploader struct {
@@ -35,7 +35,7 @@ func NewStorageService(uploadPath string) StorageService {
 }
 
 // UploadFile uploads an object
-func (c *clientUploader) UploadFile(file io.Reader, object string) error {
+func (c *clientUploader) UploadFile(file io.Reader, object string) (*storage.Writer, error) {
 	ctx := context.Background()
 
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
@@ -45,10 +45,14 @@ func (c *clientUploader) UploadFile(file io.Reader, object string) error {
 	wc := c.cl.Bucket(c.bucketName).Object(c.uploadPath + "/" + object).NewWriter(ctx)
 	wc.ObjectAttrs.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	if _, err := io.Copy(wc, file); err != nil {
-		return fmt.Errorf("io.Copy: %v", err)
+		utils.Logger.Error(err)
+		return nil, err
 	}
+
+	utils.Debug(wc.MediaLink, wc.Size)
+
 	if err := wc.Close(); err != nil {
 		log.Fatalf("Writer.Close: %v", err)
 	}
-	return nil
+	return wc, nil
 }

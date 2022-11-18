@@ -16,10 +16,11 @@ func NewService(
 	client *clients.HttpClient,
 	repository *repositories.Repository,
 ) *Service {
+	storageService := NewStorageService("vmw")
 	return &Service{
-		ExportService:  NewExportService(client, repository),
+		ExportService:  NewExportService(client, repository, storageService),
 		SaleService:    NewSaleService(NewTopicService(), repository),
 		TopicService:   NewTopicService(),
-		StorageService: NewStorageService("vmw"),
+		StorageService: storageService,
 	}
 }

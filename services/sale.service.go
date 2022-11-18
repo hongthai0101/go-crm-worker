@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"crm-worker-go/config"
 	"crm-worker-go/entities"
 	"crm-worker-go/repositories"
@@ -9,6 +8,7 @@ import (
 	"crm-worker-go/utils"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"time"
 )
@@ -118,13 +118,24 @@ func (s *SaleService) ExecuteMessage(messages types.RequestMessageOrder, source 
 	return false
 }
 
-func (s *SaleService) disbursed(payload types.PayloadMessageDisbursed) {
-	s.borrowDisbursed(types.PayloadBorrowDisbursed{
-		LoanAmount:     0,
-		ModifiedAmount: 0,
-		ContractCode:   "",
-	})
+func (s *SaleService) Disbursed(payload types.PayloadMessageDisbursed) bool {
+	if payload.ContractCode != "" {
+		return s.borrowDisbursed(types.PayloadBorrowDisbursed{
+			ContractCode:   payload.ContractCode,
+			LoanAmount:     payload.LoanAmount,
+			ModifiedAmount: payload.ModifiedAmount,
+		})
+	}
 
+	saleOppCode := payload.SaleOppCode
+
+	if saleOppCode != "" {
+		s.updateSaleOppDisbursed(payload)
+		return true
+	}
+
+	s.createSaleOppDisbursed(payload)
+	return true
 }
 
 func (s *SaleService) borrowDisbursed(payload types.PayloadBorrowDisbursed) bool {
@@ -138,25 +149,28 @@ func (s *SaleService) borrowDisbursed(payload types.PayloadBorrowDisbursed) bool
 		currentTime := time.Now()
 		currentMonth := currentTime.Format(types.YYMM)
 		disbursedMonth := sale.DisbursedAt.Format(types.YYMM)
-		if currentMonth != disbursedMonth {
+
+		if currentMonth == disbursedMonth {
 		_:
 			s.saleRepo.BaseRepo.UpdateByID(sale.ID, bson.M{"disbursedAmount": loanAmount})
-			afterSaleOppUpdated(sale)
+			s.afterSaleOppUpdated(sale)
 			return true
 		}
 		newSale := sale
+		newSale.ID = primitive.NewObjectID()
 		newSale.DisbursedAmount = modifiedAmount
 		newSale.Code = s.saleRepo.GenerateCode("")
 		newSale.DisbursedAt = &currentTime
 		entities.CreatingEntity(&newSale.BaseEntity)
 		saleOpp, _ := s.saleRepo.BaseRepo.Create(newSale)
 		s.afterSaleOppCreated(saleOpp)
+		return true
 	}
 
 	return false
 }
 
-func (s *SaleService) createSaleOppDisbursed(ctx context.Context, payload types.PayloadMessageDisbursed) {
+func (s *SaleService) createSaleOppDisbursed(payload types.PayloadMessageDisbursed) {
 	saleOppCode, lead, saleOpp := payload.SaleOppCode, payload.Lead, payload.SaleOpp
 	description := saleOpp.Description
 	contractCode := saleOpp.ContractCode
@@ -217,6 +231,62 @@ func (s *SaleService) createSaleOppDisbursed(ctx context.Context, payload types.
 
 		s.pushEventInternal(saleOppDisbursed)
 	}
+}
+
+func (s *SaleService) updateSaleOppDisbursed(payload types.PayloadMessageDisbursed) bool {
+	loanPackageCode, saleOppCode, saleOpp, lead :=
+		payload.LoanPackageCode, payload.SaleOppCode, payload.SaleOpp, payload.Lead
+	description,
+		contractCode,
+		assetType,
+		disbursedAmount,
+		accountStore,
+		createdId := saleOpp.Description,
+		saleOpp.ContractCode,
+		saleOpp.AssetType,
+		saleOpp.DisbursedAmount,
+		saleOpp.AccountStore,
+		saleOpp.CreatedId
+
+	saleItem, _ := s.saleRepo.BaseRepo.FindOne(bson.M{"code": saleOppCode}, nil)
+
+	if saleItem != nil {
+		leadUpdated, err := s.updateLead(lead)
+		if err != nil {
+			utils.Logger.Debug(err)
+			return false
+		}
+
+		entity := bson.M{
+			"loanPackageCode": loanPackageCode,
+			"status":          types.SaleOppStatusSuccess,
+			"assets": entities.Asset{
+				Description: description,
+				Media:       []entities.AssetMedia{},
+				AssetType:   assetType,
+				DemandLoan:  saleItem.Assets.DemandLoan,
+				LoanTerm:    saleItem.Assets.LoanTerm,
+			},
+			"employeeBy":      createdId,
+			"storeCode":       accountStore,
+			"disbursedAt":     currentTime,
+			"contractCode":    contractCode,
+			"disbursedAmount": disbursedAmount,
+			"updatedBy":       createdId,
+			"updatedAt":       currentTime,
+		}
+		if lead.Phone != leadUpdated.Phone {
+			metadata := saleItem.Metadata
+			metadata["phone"] = lead.Phone
+			entity["metadata"] = metadata
+			entity["group"] = s.getSaleGroup(leadUpdated.Phone, leadUpdated)
+		}
+		_, err = s.saleRepo.BaseRepo.UpdateByID(saleItem.ID, entity)
+		utils.Logger.Debug(err)
+		return false
+	}
+
+	return false
 }
 
 func (s *SaleService) findOrCreateLead(payload PayloadFindOrCreateLead) *entities.Lead {
@@ -342,18 +412,84 @@ func getOrderStatusDisplay(status string) string {
 	return ""
 }
 
-func afterSaleOppUpdated(sale *entities.SaleOpportunity) {
+func (s *SaleService) afterSaleOppUpdated(before *entities.SaleOpportunity) {
+	after, _ := s.saleRepo.BaseRepo.FindById(before.ID)
+	beforeData := utils.Omit(before, []string{
+		"leadId",
+		"source_refs",
+		"code",
+		"createdAt",
+		"updatedAt",
+		"id",
+		"createdBy",
+		"metadata",
+		"deletedAt",
+		"assets",
+		"source_refs",
+	})
 
+	afterData := utils.Omit(after, []string{
+		"leadId",
+		"source_refs",
+		"code",
+		"createdAt",
+		"updatedAt",
+		"id",
+		"createdBy",
+		"metadata",
+		"deletedAt",
+		"assets",
+		"source_refs",
+	})
+
+	id, createdBy := after.ID, after.UpdatedBy
+
+	var keyChange []string
+	for key, val := range afterData {
+		if val != beforeData[key] {
+			keyChange = append(keyChange, key)
+		}
+	}
+
+	s.logRepo.BaseRepo.Create(&entities.Log{
+		ID:                  primitive.ObjectID{},
+		BeforeAttributes:    utils.Pick(beforeData, keyChange),
+		AfterAttributes:     utils.Pick(afterData, keyChange),
+		SaleOpportunitiesId: id,
+		CreatedBy:           createdBy,
+		CreatedAt:           time.Now(),
+	})
+}
+
+func (s *SaleService) updateLead(payload types.MessageDisbursedLead) (*entities.Lead, error) {
+	phone, fullName, nationalId, account, accountStore, customerId :=
+		payload.Phone, payload.FullName, payload.NationalId, payload.Account, payload.AccountStore, payload.CustomerId
+
+	lead, err := s.leadRepo.BaseRepo.FindOne(bson.M{"phone": phone}, nil)
+	if lead != nil {
+		item, err := s.leadRepo.BaseRepo.UpdateByID(lead.ID, bson.M{
+			"fullName":   fullName,
+			"nationalId": nationalId,
+			"employeeBy": account,
+			"customerId": customerId,
+			"storeCode":  accountStore,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return item, nil
+	}
+	return nil, err
 }
 
 func (s *SaleService) afterSaleOppCreated(sale *entities.SaleOpportunity) {
 _:
 	s.logRepo.BaseRepo.Create(&entities.Log{
-		BeforeAttributes:    utils.Omit(sale, []string{"leadId", "sourceRefs", "code", "createdAt", "updatedAt", "ID", "createdBy", "hash"}),
+		BeforeAttributes:    utils.Omit(sale, []string{"leadId", "source_refs", "code", "createdAt", "updatedAt", "ID", "createdBy", "hash"}),
 		AfterAttributes:     nil,
 		SaleOpportunitiesId: sale.ID,
 		CreatedBy:           sale.CreatedBy,
-		CreatedAt:           time.Time{},
+		CreatedAt:           time.Now(),
 	})
 }
 

@@ -11,24 +11,24 @@ import (
 )
 
 type FileManagerClient struct {
-	client *Client
+	Client *Client
 }
 
-func NewFileManagerClient(token string) *FileManagerClient {
+func NewFileManagerClient() *FileManagerClient {
 	return &FileManagerClient{
-		client: NewClient(config.GetConfig().ServiceConfig.FileManagerUrl, token),
+		Client: NewClient(config.GetConfig().ServiceConfig.FileManagerUrl),
 	}
 }
 
 func (c *FileManagerClient) FindExportRequests(ctx context.Context, id string) (*types.IExportRequest, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/export-requests/%s", c.client.baseURL, id), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/export-requests/%s", c.Client.baseURL, id), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
 	var res types.IExportRequest
-	if err := c.client.sendRequest(req, &res); err != nil {
+	if err := c.Client.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 
@@ -38,14 +38,14 @@ func (c *FileManagerClient) FindExportRequests(ctx context.Context, id string) (
 func (c *FileManagerClient) UpdateExportRequestFailure(ctx context.Context, id string) error {
 	update, _ := json.Marshal(map[string]string{"status": "failure"})
 
-	req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/export-requests/%s", c.client.baseURL, id), bytes.NewBuffer(update))
+	req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/export-requests/%s", c.Client.baseURL, id), bytes.NewBuffer(update))
 	if err != nil {
 		return err
 	}
 
 	req = req.WithContext(ctx)
 	var res types.IExportRequest
-	if err := c.client.sendRequest(req, &res); err != nil {
+	if err := c.Client.sendRequest(req, &res); err != nil {
 		return err
 	}
 	return nil
@@ -63,14 +63,14 @@ func (c *FileManagerClient) CreateFile(
 		ExportRequestId: exportRequestId,
 	})
 
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/files", c.client.baseURL), bytes.NewBuffer(body))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/files", c.Client.baseURL), bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
 
 	req = req.WithContext(ctx)
-	var res types.IExportRequest
-	if err := c.client.sendRequest(req, &res); err != nil {
+	res := struct{}{}
+	if err = c.Client.sendRequest(req, &res); err != nil {
 		return err
 	}
 	return nil

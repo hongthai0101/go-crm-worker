@@ -6,10 +6,10 @@ type HttpClient struct {
 	MasterDataClient  *MasterDataClient
 }
 
-func NewHttpClient(string2 string) *HttpClient {
+func NewHttpClient() *HttpClient {
 	return &HttpClient{
-		EmployeeClient:    NewEmployeeClient(string2),
-		FileManagerClient: NewFileManagerClient(string2),
-		MasterDataClient:  NewMasterDataClient(string2),
+		EmployeeClient:    NewEmployeeClient(),
+		FileManagerClient: NewFileManagerClient(),
+		MasterDataClient:  NewMasterDataClient(),
 	}
 }

@@ -69,7 +69,7 @@ func GetConfig() *Config {
 		},
 		SubscriptionConfig: [3]*SubscriptionConfigItem{
 			{
-				Key:    GetEnv("SUBSCRIPTION_EXPORT", "dev.file_manager.data.export.crm"),
+				Key:    GetEnv("SUBSCRIPTION_EXPORT", "dev.file_manager.data.export.local"),
 				Action: "ExportCrm",
 			},
 			{

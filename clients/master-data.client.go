@@ -9,24 +9,24 @@ import (
 )
 
 type MasterDataClient struct {
-	client *Client
+	Client *Client
 }
 
-func NewMasterDataClient(token string) *MasterDataClient {
+func NewMasterDataClient() *MasterDataClient {
 	return &MasterDataClient{
-		client: NewClient(config.GetConfig().ServiceConfig.MasterDataUrl, token),
+		Client: NewClient(config.GetConfig().ServiceConfig.MasterDataUrl),
 	}
 }
 
 func (c *MasterDataClient) findAssetTypes(ctx context.Context) ([]*types.IMasterData, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/asset-types", c.client.baseURL), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/asset-types", c.Client.baseURL), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
 	var res []*types.IMasterData
-	if err := c.client.sendRequest(req, &res); err != nil {
+	if err := c.Client.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -42,14 +42,14 @@ func (c *MasterDataClient) GetAssetType(ctx context.Context) *map[string]string 
 }
 
 func (c *MasterDataClient) findSource(ctx context.Context) ([]*types.IMasterData, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/crm/sources", c.client.baseURL), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/crm/sources", c.Client.baseURL), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
 	var res []*types.IMasterData
-	if err := c.client.sendRequest(req, &res); err != nil {
+	if err := c.Client.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -65,14 +65,14 @@ func (c *MasterDataClient) GetSource(ctx context.Context) *map[string]string {
 }
 
 func (c *MasterDataClient) findType(ctx context.Context) ([]*types.IMasterData, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/crm/types", c.client.baseURL), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/crm/types", c.Client.baseURL), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
 	var res []*types.IMasterData
-	if err := c.client.sendRequest(req, &res); err != nil {
+	if err := c.Client.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -88,14 +88,14 @@ func (c *MasterDataClient) GetTypes(ctx context.Context) *map[string]string {
 }
 
 func (c *MasterDataClient) findStores(ctx context.Context) ([]*types.IMasterData, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/stores", c.client.baseURL), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/stores", c.Client.baseURL), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
 	var res []*types.IMasterData
-	if err := c.client.sendRequest(req, &res); err != nil {
+	if err := c.Client.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -111,14 +111,14 @@ func (c *MasterDataClient) GetStores(ctx context.Context) *map[string]string {
 }
 
 func (c *MasterDataClient) findStatuses(ctx context.Context) ([]*types.IMasterData, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/crm/statuses", c.client.baseURL), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/crm/statuses", c.Client.baseURL), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
 	var res []*types.IMasterData
-	if err := c.client.sendRequest(req, &res); err != nil {
+	if err := c.Client.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -134,14 +134,14 @@ func (c *MasterDataClient) GetStatuses(ctx context.Context) *map[string]string {
 }
 
 func (c *MasterDataClient) findProvinces(ctx context.Context) ([]*types.IMasterData, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/provinces", c.client.baseURL), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/provinces", c.Client.baseURL), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
 	var res []*types.IMasterData
-	if err := c.client.sendRequest(req, &res); err != nil {
+	if err := c.Client.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -157,14 +157,14 @@ func (c *MasterDataClient) GetProvinces(ctx context.Context) *map[string]string 
 }
 
 func (c *MasterDataClient) findGroups(ctx context.Context) ([]*types.IMasterData, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/crm/groups", c.client.baseURL), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/crm/groups", c.Client.baseURL), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
 	var res []*types.IMasterData
-	if err := c.client.sendRequest(req, &res); err != nil {
+	if err := c.Client.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 	return res, nil

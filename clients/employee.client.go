@@ -11,12 +11,12 @@ import (
 )
 
 type EmployeeClient struct {
-	client *Client
+	Client *Client
 }
 
-func NewEmployeeClient(token string) *EmployeeClient {
+func NewEmployeeClient() *EmployeeClient {
 	return &EmployeeClient{
-		client: NewClient(config.GetConfig().ServiceConfig.EmployeeUrl, token),
+		Client: NewClient(config.GetConfig().ServiceConfig.EmployeeUrl),
 	}
 }
 
@@ -25,14 +25,14 @@ func (c *EmployeeClient) findByIds(ctx context.Context, ids []string) ([]*types.
 		"ids": ids,
 	})
 
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/employees/list", c.client.baseURL), bytes.NewBuffer(postBody))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/employees/list", c.Client.baseURL), bytes.NewBuffer(postBody))
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
 	var employees []*types.IEmployee
-	if err := c.client.sendRequest(req, &employees); err != nil {
+	if err := c.Client.sendRequest(req, &employees); err != nil {
 		return nil, err
 	}
 	return employees, nil

@@ -33,9 +33,9 @@ type IExportRequest struct {
 }
 
 type CreateFileRequest struct {
-	Url             string      `json:"url"`
-	Info            interface{} `json:"info"`
-	ExportRequestId string      `json:"exportRequestId"`
+	Url             string      `json:"url" :"url"`
+	Info            interface{} `json:"info" :"info"`
+	ExportRequestId string      `json:"exportRequestId" :"exportRequestId"`
 }
 
 type PayloadMessageExport struct {
@@ -74,8 +74,10 @@ type PayloadMessageDisbursed struct {
 	LoanPackageCode string                  `json:"loanPackageCode"`
 	Lead            MessageDisbursedLead    `json:"lead"`
 	SaleOpp         MessageDisbursedSaleOpp `json:"saleOpp"`
-	ContractCode    string                  `json:"contractCode"`
 	IsManual        bool                    `json:"isManual"`
+	LoanAmount      int                     `json:"loanAmount"`
+	ModifiedAmount  int                     `json:"modifiedAmount"`
+	ContractCode    string                  `json:"contractCode"`
 }
 
 type MessageDisbursedLead struct {

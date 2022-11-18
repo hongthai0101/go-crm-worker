@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"crm-worker-go/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,21 +10,18 @@ import (
 	"time"
 )
 
-// Client .
 type Client struct {
 	token      string
 	baseURL    string
 	HTTPClient *http.Client
 }
 
-// NewClient .
-func NewClient(BaseURL string, token string) *Client {
+func NewClient(BaseURL string) *Client {
 	return &Client{
 		HTTPClient: &http.Client{
 			Timeout: 5 * time.Minute,
 		},
 		baseURL: BaseURL,
-		token:   token,
 	}
 }
 
@@ -40,7 +38,7 @@ type successResponse struct {
 func (c *Client) sendRequest(req *http.Request, v interface{}) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json; charset=utf-8")
-	req.Header.Set("Authorization", c.token)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	res, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -50,21 +48,20 @@ func (c *Client) sendRequest(req *http.Request, v interface{}) error {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-
+			fmt.Printf("%v", err.Error())
 		}
 	}(res.Body)
 
-	// Try to unmarshall into errorResponse
 	if res.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(res.Body)
+		utils.Debug(string(bodyBytes))
 		var errRes errorResponse
 		if err = json.NewDecoder(res.Body).Decode(&errRes); err == nil {
 			return errors.New(errRes.Message)
 		}
-
 		return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
 	}
 
-	// Unmarshall and populate v
 	fullResponse := successResponse{
 		Code: res.StatusCode,
 		Data: v,
@@ -73,4 +70,8 @@ func (c *Client) sendRequest(req *http.Request, v interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func (c *Client) SetToken(token string) {
+	c.token = token
 }

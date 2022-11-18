@@ -7,18 +7,17 @@ import (
 	"crm-worker-go/repositories"
 	"crm-worker-go/types"
 	"crm-worker-go/utils"
-	"fmt"
 	"github.com/xuri/excelize/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
+	"io"
 	"strings"
 	"sync"
 	"time"
 )
 
-const Token = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJhS2FrTGt1dEtsVDlTNUtqWnZ3dmZrMVdyd01nS2pFZTFFbE9BeTlOU1ZJIn0.eyJleHAiOjE2NjY3NzEyODksImlhdCI6MTY2Njc3MDk4OSwianRpIjoiZjk4MDM3ZjktODViZS00NTA0LTk3NWEtYTQ4MmMxYzUwZmJhIiwiaXNzIjoiaHR0cHM6Ly9pZC1kZXYudmlldG1vbmV5LnZuL2F1dGgvcmVhbG1zL2FwcCIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiJmNjg3ZmU4My1lMjJlLTQ4NmMtYjg2OC00YThjZjI2ZGZiZmEiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJtb2JpbGUtYXBwIiwic2Vzc2lvbl9zdGF0ZSI6ImUwNWI3ZTNkLWZjNWMtNDgxOC1iOTk3LTBkMzhkMTdlZmUwMCIsImFjciI6IjEiLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoicHJvZmlsZSBlbWFpbCIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiIwOTA5MjYxNTQxIn0.TstAAY8m9kdDd1nVGlDwdnLWJgX865ezMishk-QC_VtJAOHJBvAHm6wKNvXnloeyDo6aBycsCDQ4hg8-bmdiAWgM9yzEEScga7R-f5lu0i1Nirz2w53k2tAEACmW5Qrj4x0oKcbiX8LqQObkqIDK2U5OaUbKP6bgwkLXqWK3Xjs9zUOeLDNc0NNV8jSTIAgVwMlTvy5CUMFd3x1a71utW-dS1UrzeRqweVb4SLl-ml0ov0BOwgJD25wrR9zpjYES6tEM-rlVvqkStIVAcDbbMkTJjMt-9CW3GkLj5xpNzeaJTMJgUXFd67fpQqg1ZT7cB4xB4fqr99w5Slsb_WFYcQ"
+var ctx = context.Background()
 
 type ExportService struct {
 	fileManagerClient *clients.FileManagerClient
@@ -28,9 +27,10 @@ type ExportService struct {
 	leadRepo          *repositories.LeadRepository
 	tagRepo           *repositories.TagRepository
 	noteRepo          *repositories.NoteRepository
+	uploader          StorageService
 }
 
-func NewExportService(client *clients.HttpClient, repository *repositories.Repository) *ExportService {
+func NewExportService(client *clients.HttpClient, repository *repositories.Repository, uploader StorageService) *ExportService {
 	return &ExportService{
 		fileManagerClient: client.FileManagerClient,
 		employeeClient:    client.EmployeeClient,
@@ -39,6 +39,7 @@ func NewExportService(client *clients.HttpClient, repository *repositories.Repos
 		leadRepo:          repository.LeadRepo,
 		tagRepo:           repository.TagRepo,
 		noteRepo:          repository.NoteRepo,
+		uploader:          uploader,
 	}
 }
 
@@ -65,14 +66,18 @@ type iJobs struct {
 }
 
 func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
+	s.fileManagerClient.Client.SetToken(payload.Token)
+	s.masterDataClient.Client.SetToken(payload.Token)
+	s.employeeClient.Client.SetToken(payload.Token)
+
 	var wg = sync.WaitGroup{}
 	wg.Add(3)
 
-	ctx := context.Background()
 	exportRequest, err := s.fileManagerClient.FindExportRequests(ctx, payload.ID)
 
 	if err != nil {
-		log.Fatal("Get Export Request Failure", err)
+		utils.Logger.Error("Get Export Request Failure ", err, "With Id: ", payload.ID)
+		return false
 	}
 
 	if utils.Contains([]string{types.Completed, types.Failure}, exportRequest.Status) {
@@ -207,8 +212,8 @@ func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 		exportData = append(exportData, <-result)
 	}
 
-	createExcel(exportData, payload.ID)
-	return false
+	_ = s.saveFile(exportData, payload.ID)
+	return true
 }
 
 func worker(jobs <-chan iJobs, results chan<- []interface{}) {
@@ -404,26 +409,37 @@ func (s *ExportService) getDataDatabase(
 	}
 }
 
-func createExcel(values [][]interface{}, filename string) {
+func (s *ExportService) saveFile(values [][]interface{}, exportRequestId string) error {
 	f := excelize.NewFile()
 	for i, row := range values {
 		startCell, err := excelize.JoinCellName("A", i+1)
 		if err != nil {
-			log.Fatalf("Error %v", err)
-			return
+			utils.Logger.Error(err)
+			return nil
 		}
 
 		if err := f.SetSheetRow("Sheet1", startCell, &row); err != nil {
-			log.Fatalf("Error %v", err)
-			return
+			utils.Logger.Error(err)
+			return nil
 		}
 	}
-	if err := f.SaveAs(filename + ".xlsx"); err != nil {
-		fmt.Println(err)
+
+	file, _ := f.WriteToBuffer()
+	reader := io.Reader(file)
+	result, err := s.uploader.UploadFile(reader, exportRequestId+".xlsx")
+	if err != nil {
+		return err
 	}
 
-	//file, _ := f.WriteToBuffer()
-	//reader := io.Reader(file)
-	//uploader := NewStorageService("test-files")
-	//_ = uploader.UploadFile(reader, filename+".xlsx")
+	err = s.fileManagerClient.CreateFile(ctx, exportRequestId, result.Name, map[string]interface{}{
+		"name": result.Name,
+		"type": result.ContentType,
+		"size": result.Size,
+	})
+
+	if err != nil {
+		_ = s.fileManagerClient.UpdateExportRequestFailure(ctx, exportRequestId)
+		return err
+	}
+	return nil
 }
