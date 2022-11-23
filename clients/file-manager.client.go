@@ -2,9 +2,9 @@ package clients
 
 import (
 	"bytes"
-	"context"
 	"crm-worker-go/config"
 	"crm-worker-go/types"
+	"crm-worker-go/utils"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -20,39 +20,42 @@ func NewFileManagerClient() *FileManagerClient {
 	}
 }
 
-func (c *FileManagerClient) FindExportRequests(ctx context.Context, id string) (*types.IExportRequest, error) {
+func (c *FileManagerClient) FindExportRequests(id string) (*types.IExportRequest, error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/export-requests/%s", c.Client.baseURL, id), nil)
 	if err != nil {
+		utils.Logger.Error(err)
 		return nil, err
 	}
 
-	req = req.WithContext(ctx)
+	req = req.WithContext(HttpCtx)
 	var res types.IExportRequest
-	if err := c.Client.sendRequest(req, &res); err != nil {
+	if err = c.Client.sendRequest(req, &res); err != nil {
+		utils.Logger.Error(err)
 		return nil, err
 	}
 
 	return &res, nil
 }
 
-func (c *FileManagerClient) UpdateExportRequestFailure(ctx context.Context, id string) error {
+func (c *FileManagerClient) UpdateExportRequestFailure(id string) error {
 	update, _ := json.Marshal(map[string]string{"status": "failure"})
 
 	req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/export-requests/%s", c.Client.baseURL, id), bytes.NewBuffer(update))
 	if err != nil {
+		utils.Logger.Error(err)
 		return err
 	}
 
-	req = req.WithContext(ctx)
+	req = req.WithContext(HttpCtx)
 	var res types.IExportRequest
-	if err := c.Client.sendRequest(req, &res); err != nil {
+	if err = c.Client.sendRequest(req, &res); err != nil {
+		utils.Logger.Error(err)
 		return err
 	}
 	return nil
 }
 
 func (c *FileManagerClient) CreateFile(
-	ctx context.Context,
 	exportRequestId string,
 	url string,
 	info interface{},
@@ -65,12 +68,14 @@ func (c *FileManagerClient) CreateFile(
 
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/files", c.Client.baseURL), bytes.NewBuffer(body))
 	if err != nil {
+		utils.Logger.Error(err)
 		return err
 	}
 
-	req = req.WithContext(ctx)
+	req = req.WithContext(HttpCtx)
 	res := struct{}{}
 	if err = c.Client.sendRequest(req, &res); err != nil {
+		utils.Logger.Error(err)
 		return err
 	}
 	return nil

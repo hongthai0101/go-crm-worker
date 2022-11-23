@@ -17,10 +17,11 @@ func NewService(
 	repository *repositories.Repository,
 ) *Service {
 	storageService := NewStorageService("vmw")
+	topicService := NewTopicService()
 	return &Service{
 		ExportService:  NewExportService(client, repository, storageService),
-		SaleService:    NewSaleService(NewTopicService(), repository),
-		TopicService:   NewTopicService(),
+		SaleService:    NewSaleService(topicService, repository),
+		TopicService:   topicService,
 		StorageService: storageService,
 	}
 }

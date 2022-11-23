@@ -2,7 +2,7 @@ package repositories
 
 import (
 	"context"
-	"fmt"
+	"crm-worker-go/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -19,7 +19,8 @@ func (r *BaseRepository[T]) Find(filter interface{}, opts *options.FindOptions) 
 	cursor, _ := r.col.Find(r.ctx, filter, opts)
 
 	if err := cursor.All(r.ctx, &results); err != nil {
-		panic(err)
+		utils.Logger.Error(err)
+		return nil, err
 	}
 	return results, nil
 }
@@ -27,6 +28,7 @@ func (r *BaseRepository[T]) Find(filter interface{}, opts *options.FindOptions) 
 func (r *BaseRepository[T]) Count(filter interface{}) (int64, error) {
 	total, err := r.col.CountDocuments(r.ctx, filter)
 	if err != nil {
+		utils.Logger.Error(err)
 		return 0, err
 	}
 	return total, nil
@@ -37,11 +39,13 @@ func (r *BaseRepository[T]) FindOne(filter interface{}, opts *options.FindOneOpt
 
 	cursor := r.col.FindOne(r.ctx, filter, opts)
 	if cursor.Err() != nil {
-		return nil, nil
+		utils.Logger.Error(cursor.Err())
+		return nil, cursor.Err()
 	}
 
 	if err := cursor.Decode(&item); err != nil {
-		panic(err)
+		utils.Logger.Error(err)
+		return nil, err
 	}
 
 	return item, nil
@@ -50,6 +54,7 @@ func (r *BaseRepository[T]) FindOne(filter interface{}, opts *options.FindOneOpt
 func (r *BaseRepository[T]) Create(entity *T) (*T, error) {
 	result, err := r.col.InsertOne(r.ctx, entity)
 	if err != nil {
+		utils.Logger.Error(err)
 		return nil, err
 	}
 
@@ -68,13 +73,14 @@ func (r *BaseRepository[T]) UpdateByID(
 		"$set", payload,
 	}})
 	if err != nil {
-		fmt.Printf("%v", err)
+		utils.Logger.Error(err)
 		return nil, err
 	}
 
 	var item *T
 	if err = r.col.FindOne(r.ctx, bson.M{"_id": Id}).Decode(&item); err != nil {
-		panic(err)
+		utils.Logger.Error(err)
+		return nil, err
 	}
 	return item, nil
 }
@@ -82,6 +88,7 @@ func (r *BaseRepository[T]) UpdateByID(
 func (r *BaseRepository[T]) Delete(filter bson.D) (bool, error) {
 	_, err := r.col.DeleteOne(r.ctx, filter)
 	if err != nil {
+		utils.Logger.Error(err)
 		return false, err
 	}
 	return true, nil
@@ -92,11 +99,13 @@ func (r *BaseRepository[T]) FindById(Id primitive.ObjectID) (*T, error) {
 
 	cursor := r.col.FindOne(r.ctx, bson.M{"_id": Id}, nil)
 	if cursor.Err() != nil {
-		return nil, nil
+		utils.Logger.Error(cursor.Err())
+		return nil, cursor.Err()
 	}
 
 	if err := cursor.Decode(&item); err != nil {
-		panic(err)
+		utils.Logger.Error(err)
+		return nil, err
 	}
 
 	return item, nil

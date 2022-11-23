@@ -3,6 +3,7 @@ package datasources
 import (
 	"context"
 	"crm-worker-go/config"
+	"crm-worker-go/utils"
 	"fmt"
 	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -39,10 +40,12 @@ func ConnectDB() (*mongo.Client, context.Context, context.CancelFunc, error) {
 	}
 	client, err := mongo.Connect(ctx, option)
 	if err != nil {
+		utils.Logger.Error(err)
 		panic(err)
 	}
 
-	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
+	if err = client.Ping(context.TODO(), readpref.Primary()); err != nil {
+		utils.Logger.Error(err)
 		panic(err)
 	}
 	MongoClient = client
@@ -56,6 +59,7 @@ func Close(client *mongo.Client, ctx context.Context,
 
 	defer func() {
 		if err := client.Disconnect(ctx); err != nil {
+			utils.Logger.Error(err)
 			log.Fatalf("Disconnect To Database Errors %v", err)
 		}
 	}()

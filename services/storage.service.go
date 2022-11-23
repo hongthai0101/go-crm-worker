@@ -24,6 +24,7 @@ type clientUploader struct {
 func NewStorageService(uploadPath string) StorageService {
 	client, err := storage.NewClient(context.Background())
 	if err != nil {
+		utils.Logger.Error(err)
 		log.Fatalf("Failed to create client: %v", err)
 	}
 	return &clientUploader{

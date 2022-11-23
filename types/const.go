@@ -31,3 +31,17 @@ const (
 	TopicSubscriptionTypeOrderUpdated = "customer.order.updated"
 	TopicSubscriptionTypeLoanUpdated  = "loan.order.updated"
 )
+
+const (
+	ExportRequestTypeSaleOpp = "saleOpportunity"
+	ExportRequestTypeLead    = "lead"
+)
+
+const (
+	PolicyResourceSaleOpportunities = "SALES_OPPORTUNITY"
+	PolicyResourceLead              = "LEAD"
+)
+
+const (
+	AuthorizationActionReadAny = "read:any"
+)

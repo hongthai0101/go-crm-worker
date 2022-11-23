@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"crm-worker-go/clients"
 	"crm-worker-go/entities"
 	"crm-worker-go/repositories"
@@ -16,8 +15,6 @@ import (
 	"sync"
 	"time"
 )
-
-var ctx = context.Background()
 
 type ExportService struct {
 	fileManagerClient *clients.FileManagerClient
@@ -43,13 +40,13 @@ func NewExportService(client *clients.HttpClient, repository *repositories.Repos
 	}
 }
 
-type getDataDB struct {
+type GetDataDB struct {
 	leads map[string]*entities.Lead
 	notes map[string]*entities.Note
 	tags  map[string]*entities.Tag
 }
 
-type iMasterData struct {
+type IMasterData struct {
 	assetTypes *map[string]string
 	sources    *map[string]string
 	statuses   *map[string]string
@@ -58,22 +55,26 @@ type iMasterData struct {
 	groups     *map[string]string
 }
 
-type iJobs struct {
+type IJobs struct {
 	sale       *entities.SaleOpportunity
-	items      getDataDB
-	masterData iMasterData
+	items      GetDataDB
+	masterData IMasterData
 	employees  *map[string]string
 }
 
-func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
-	s.fileManagerClient.Client.SetToken(payload.Token)
-	s.masterDataClient.Client.SetToken(payload.Token)
-	s.employeeClient.Client.SetToken(payload.Token)
+func (s *ExportService) ExportData(payload types.PayloadMessageExport) bool {
+	token := payload.Token
+	_, err := utils.ExtractClaims(token)
+	if err != nil {
+		utils.Logger.Error(err)
+		return false
+	}
 
-	var wg = sync.WaitGroup{}
-	wg.Add(3)
+	s.fileManagerClient.Client.SetToken(token)
+	s.masterDataClient.Client.SetToken(token)
+	s.employeeClient.Client.SetToken(token)
 
-	exportRequest, err := s.fileManagerClient.FindExportRequests(ctx, payload.ID)
+	exportRequest, err := s.fileManagerClient.FindExportRequests(payload.ID)
 
 	if err != nil {
 		utils.Logger.Error("Get Export Request Failure ", err, "With Id: ", payload.ID)
@@ -84,7 +85,21 @@ func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 		return true
 	}
 
-	requestData := exportRequest.Data
+	switch exportRequest.Type {
+	case types.ExportRequestTypeSaleOpp:
+		return s.exportSaleOpp(exportRequest)
+	case types.ExportRequestTypeLead:
+		return s.exportLead(exportRequest)
+	}
+	return false
+}
+
+func (s *ExportService) exportSaleOpp(payload *types.IExportRequest) bool {
+	requestData := payload.Data
+
+	var wg = sync.WaitGroup{}
+	wg.Add(3)
+
 	start, _ := time.Parse(types.DDMMYYYY, requestData.Start)
 	end, _ := time.Parse(types.DDMMYYYY, requestData.End)
 
@@ -94,9 +109,9 @@ func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 		},
 		{
 			"createdAt", bson.M{
-				"$gte": primitive.NewDateTimeFromTime(start),
-				"$lt":  primitive.NewDateTimeFromTime(end),
-			},
+			"$gte": primitive.NewDateTimeFromTime(start),
+			"$lt":  primitive.NewDateTimeFromTime(end),
+		},
 		},
 	}
 
@@ -141,23 +156,23 @@ func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 		employeeIds = append(employeeIds, sale.CreatedBy, sale.UpdatedBy, sale.EmployeeBy)
 	}
 
-	var items getDataDB
+	var items GetDataDB
 	go func() {
-		items = s.getDataDatabase(ctx, saleIds, leadIds)
+		items = s.getDataDatabase(saleIds, leadIds)
 		wg.Done()
 	}()
 
 	var employees *map[string]string
-	go func(ctx context.Context) {
-		employees, _ = s.employeeClient.GetEmployees(ctx, employeeIds)
+	go func() {
+		employees, _ = s.employeeClient.GetEmployees(employeeIds)
 		wg.Done()
-	}(ctx)
+	}()
 
-	var masterData iMasterData
-	go func(ctx context.Context) {
-		masterData = s.getMasterData(ctx, payload.Token)
+	var masterData IMasterData
+	go func() {
+		masterData = s.getMasterData()
 		wg.Done()
-	}(ctx)
+	}()
 	wg.Wait()
 
 	exportData := [][]interface{}{
@@ -189,7 +204,7 @@ func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 	}
 
 	number, numberWorker := len(results), 4
-	jobs, result := make(chan iJobs, number), make(chan []interface{}, number)
+	jobs, result := make(chan IJobs, number), make(chan []interface{}, number)
 
 	wg.Add(4)
 	for i := 1; i <= numberWorker; i++ {
@@ -199,7 +214,7 @@ func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 	wg.Wait()
 
 	for _, sale := range results {
-		jobs <- iJobs{
+		jobs <- IJobs{
 			sale:       sale,
 			items:      items,
 			masterData: masterData,
@@ -212,18 +227,72 @@ func (s *ExportService) ExportSaleOpp(payload types.PayloadMessageExport) bool {
 		exportData = append(exportData, <-result)
 	}
 
-	_ = s.saveFile(exportData, payload.ID)
+	err := s.saveFile(exportData, payload.ID)
+	if err != nil {
+		utils.Logger.Error(err)
+		return false
+	}
 	return true
 }
 
-func worker(jobs <-chan iJobs, results chan<- []interface{}) {
+func (s *ExportService) exportLead(payload *types.IExportRequest) bool {
+	requestData := payload.Data
+
+	var wg = sync.WaitGroup{}
+	wg.Add(3)
+
+	start, _ := time.Parse(types.DDMMYYYY, requestData.Start)
+	end, _ := time.Parse(types.DDMMYYYY, requestData.End)
+
+	filter := bson.D{
+		{
+			"deletedAt", nil,
+		},
+		{
+			"createdAt", bson.M{
+			"$gte": primitive.NewDateTimeFromTime(start),
+			"$lt":  primitive.NewDateTimeFromTime(end),
+		},
+		},
+	}
+
+	results, _ := s.leadRepo.BaseRepo.Find(filter, nil)
+	if len(results) == 0 {
+		return true
+	}
+
+	exportData := [][]interface{}{
+		{
+			"Full Name",
+			"Phone",
+			"Email",
+			"Source",
+			"Account Store",
+			"Address",
+		},
+	}
+
+	for _, lead := range results {
+		exportData = append(exportData, []interface{}{
+			lead.FullName, lead.Phone, lead.Email, lead.Source, lead.EmployeeBy, lead.Address,
+		})
+	}
+	err := s.saveFile(exportData, payload.ID)
+	if err != nil {
+		utils.Logger.Error(err)
+		return false
+	}
+	return true
+}
+
+func worker(jobs <-chan IJobs, results chan<- []interface{}) {
 	for n := range jobs {
 		results <- handleData(n)
 	}
 }
 
 func handleData(
-	payload iJobs,
+	payload IJobs,
 ) []interface{} {
 	sale := payload.sale
 	items := payload.items
@@ -251,7 +320,7 @@ func handleData(
 	UpdatedAt := (sale.UpdatedAt).String()
 	Code := sale.Code
 	FullName := lead.FullName
-	Phone := lead.Phone
+	Phone := utils.MaskStr(lead.Phone, 3, 4, "*")
 	Email := lead.Email
 	Type := (*masterData.types)[sale.Type]
 	Source := (*masterData.sources)[sale.Source]
@@ -279,7 +348,7 @@ func handleData(
 	}
 }
 
-func (s *ExportService) getMasterData(ctx context.Context, token string) iMasterData {
+func (s *ExportService) getMasterData() IMasterData {
 	var result []map[string]string
 
 	var wg = sync.WaitGroup{}
@@ -287,45 +356,45 @@ func (s *ExportService) getMasterData(ctx context.Context, token string) iMaster
 
 	var assetTypes, sources, statuses, dataTypes, provinces, groups *map[string]string
 
-	go func(ctx context.Context) {
-		assetTypes = s.masterDataClient.GetAssetType(ctx)
+	go func() {
+		assetTypes = s.masterDataClient.GetAssetType()
 		result = append(result, *assetTypes)
 		wg.Done()
-	}(ctx)
+	}()
 
-	go func(ctx context.Context) {
-		sources = s.masterDataClient.GetSource(ctx)
+	go func() {
+		sources = s.masterDataClient.GetSource()
 		result = append(result, *sources)
 		wg.Done()
-	}(ctx)
+	}()
 
-	go func(ctx context.Context) {
-		statuses = s.masterDataClient.GetStatuses(ctx)
+	go func() {
+		statuses = s.masterDataClient.GetStatuses()
 		result = append(result, *statuses)
 		wg.Done()
-	}(ctx)
+	}()
 
-	go func(ctx context.Context) {
-		dataTypes = s.masterDataClient.GetTypes(ctx)
+	go func() {
+		dataTypes = s.masterDataClient.GetTypes()
 		result = append(result, *dataTypes)
 		wg.Done()
-	}(ctx)
+	}()
 
-	go func(ctx context.Context) {
-		groups = s.masterDataClient.GetGroups(ctx)
+	go func() {
+		groups = s.masterDataClient.GetGroups()
 		result = append(result, *groups)
 		wg.Done()
-	}(ctx)
+	}()
 
-	go func(ctx context.Context) {
-		provinces = s.masterDataClient.GetProvinces(ctx)
+	go func() {
+		provinces = s.masterDataClient.GetProvinces()
 		result = append(result, *provinces)
 		wg.Done()
-	}(ctx)
+	}()
 
 	wg.Wait()
 
-	return iMasterData{
+	return IMasterData{
 		assetTypes: assetTypes,
 		sources:    sources,
 		statuses:   statuses,
@@ -336,10 +405,9 @@ func (s *ExportService) getMasterData(ctx context.Context, token string) iMaster
 }
 
 func (s *ExportService) getDataDatabase(
-	ctx context.Context,
 	saleIds []primitive.ObjectID,
 	leadIds []primitive.ObjectID,
-) getDataDB {
+) GetDataDB {
 	var wg = sync.WaitGroup{}
 	wg.Add(3)
 
@@ -402,7 +470,7 @@ func (s *ExportService) getDataDatabase(
 
 	wg.Wait()
 
-	return getDataDB{
+	return GetDataDB{
 		leads: leads,
 		notes: notes,
 		tags:  tags,
@@ -418,7 +486,7 @@ func (s *ExportService) saveFile(values [][]interface{}, exportRequestId string)
 			return nil
 		}
 
-		if err := f.SetSheetRow("Sheet1", startCell, &row); err != nil {
+		if err := f.SetSheetRow("Data", startCell, &row); err != nil {
 			utils.Logger.Error(err)
 			return nil
 		}
@@ -431,14 +499,14 @@ func (s *ExportService) saveFile(values [][]interface{}, exportRequestId string)
 		return err
 	}
 
-	err = s.fileManagerClient.CreateFile(ctx, exportRequestId, result.Name, map[string]interface{}{
+	err = s.fileManagerClient.CreateFile(exportRequestId, result.Name, map[string]interface{}{
 		"name": result.Name,
 		"type": result.ContentType,
 		"size": result.Size,
 	})
 
 	if err != nil {
-		_ = s.fileManagerClient.UpdateExportRequestFailure(ctx, exportRequestId)
+		_ = s.fileManagerClient.UpdateExportRequestFailure(exportRequestId)
 		return err
 	}
 	return nil

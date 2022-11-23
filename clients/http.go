@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"context"
 	"crm-worker-go/utils"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,8 @@ type successResponse struct {
 	Code int         `json:"code"`
 	Data interface{} `json:"data"`
 }
+
+var HttpCtx = context.Background()
 
 func (c *Client) sendRequest(req *http.Request, v interface{}) error {
 	req.Header.Set("Content-Type", "application/json")

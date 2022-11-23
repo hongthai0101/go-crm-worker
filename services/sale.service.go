@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"strings"
 	"time"
 )
 
@@ -43,7 +44,7 @@ func NewSaleService(topicService *TopicService, repository *repositories.Reposit
 	}
 }
 
-func (s *SaleService) ExecuteMessage(messages types.RequestMessageOrder, source string) bool {
+func (s *SaleService) OrderCreated(messages types.MessageOrderCreated, source string) bool {
 	order := messages.Order
 	metadata := messages.Metadata
 	images := messages.Images
@@ -118,7 +119,7 @@ func (s *SaleService) ExecuteMessage(messages types.RequestMessageOrder, source 
 	return false
 }
 
-func (s *SaleService) Disbursed(payload types.PayloadMessageDisbursed) bool {
+func (s *SaleService) OrderDisbursed(payload types.MessageOrderDisbursed) bool {
 	if payload.ContractCode != "" {
 		return s.borrowDisbursed(types.PayloadBorrowDisbursed{
 			ContractCode:   payload.ContractCode,
@@ -170,7 +171,7 @@ func (s *SaleService) borrowDisbursed(payload types.PayloadBorrowDisbursed) bool
 	return false
 }
 
-func (s *SaleService) createSaleOppDisbursed(payload types.PayloadMessageDisbursed) {
+func (s *SaleService) createSaleOppDisbursed(payload types.MessageOrderDisbursed) bool {
 	saleOppCode, lead, saleOpp := payload.SaleOppCode, payload.Lead, payload.SaleOpp
 	description := saleOpp.Description
 	contractCode := saleOpp.ContractCode
@@ -231,9 +232,11 @@ func (s *SaleService) createSaleOppDisbursed(payload types.PayloadMessageDisburs
 
 		s.pushEventInternal(saleOppDisbursed)
 	}
+
+	return false
 }
 
-func (s *SaleService) updateSaleOppDisbursed(payload types.PayloadMessageDisbursed) bool {
+func (s *SaleService) updateSaleOppDisbursed(payload types.MessageOrderDisbursed) bool {
 	loanPackageCode, saleOppCode, saleOpp, lead :=
 		payload.LoanPackageCode, payload.SaleOppCode, payload.SaleOpp, payload.Lead
 	description,
@@ -253,7 +256,7 @@ func (s *SaleService) updateSaleOppDisbursed(payload types.PayloadMessageDisburs
 	if saleItem != nil {
 		leadUpdated, err := s.updateLead(lead)
 		if err != nil {
-			utils.Logger.Debug(err)
+			utils.Logger.Error(err)
 			return false
 		}
 
@@ -282,8 +285,11 @@ func (s *SaleService) updateSaleOppDisbursed(payload types.PayloadMessageDisburs
 			entity["group"] = s.getSaleGroup(leadUpdated.Phone, leadUpdated)
 		}
 		_, err = s.saleRepo.BaseRepo.UpdateByID(saleItem.ID, entity)
-		utils.Logger.Debug(err)
-		return false
+		if err != nil {
+			utils.Logger.Error(err)
+			return false
+		}
+		return true
 	}
 
 	return false
@@ -345,13 +351,17 @@ func (s *SaleService) getSaleGroup(phone string, lead *entities.Lead) string {
 	return group
 }
 
-func getMedia(images []interface{}) []entities.AssetMedia {
+func getMedia(images []string) []entities.AssetMedia {
 	medias := make([]entities.AssetMedia, 0)
 
 	for i := 0; i < len(images); i++ {
+		url := images[i]
+		if !strings.Contains(url, "https://") {
+			url = "https://" + url
+		}
 		medias = append(medias, entities.AssetMedia{
-			Url:      "",
-			MimeType: "",
+			Url:      url,
+			MimeType: "image/png",
 		})
 	}
 	return medias
@@ -451,7 +461,7 @@ func (s *SaleService) afterSaleOppUpdated(before *entities.SaleOpportunity) {
 		}
 	}
 
-	s.logRepo.BaseRepo.Create(&entities.Log{
+	_, _ = s.logRepo.BaseRepo.Create(&entities.Log{
 		ID:                  primitive.ObjectID{},
 		BeforeAttributes:    utils.Pick(beforeData, keyChange),
 		AfterAttributes:     utils.Pick(afterData, keyChange),
@@ -475,10 +485,12 @@ func (s *SaleService) updateLead(payload types.MessageDisbursedLead) (*entities.
 			"storeCode":  accountStore,
 		})
 		if err != nil {
+			utils.Logger.Error(err)
 			return nil, err
 		}
 		return item, nil
 	}
+	utils.Logger.Error(err)
 	return nil, err
 }
 
@@ -494,10 +506,26 @@ _:
 }
 
 func (s *SaleService) pushEventInternal(saleOpp *entities.SaleOpportunity) {
+	sourceRefs, employeeBy, storeCode, code, status, id :=
+		saleOpp.SourceRefs, saleOpp.EmployeeBy, saleOpp.StoreCode, saleOpp.Code, saleOpp.Status, saleOpp.ID
+
 	s.topicService.Send(config.GetConfig().TopicConfig.CustomerOrderUpdated, map[string]interface{}{
-		"data":      "",
-		"receivers": []string{"customerId"},
+		"data": map[string]interface{}{
+			"code":       code,
+			"statusName": getOrderStatusDisplay(status),
+			"id":         id,
+		},
 	}, map[string]string{
-		"subscriptionType": "subscriptionType",
+		"source_refs": fmt.Sprint(map[string]string{
+			"source": sourceRefs.Source,
+			"ref_id": sourceRefs.RefId,
+		}),
+		"subscriptionType": types.TopicSubscriptionTypeOrderUpdated,
+		"receivers":        fmt.Sprint([1]string{employeeBy}),
+		"permission": fmt.Sprint(map[string]string{
+			"resource": types.PolicyResourceSaleOpportunities,
+			"subject":  storeCode,
+			"action":   types.AuthorizationActionReadAny,
+		}),
 	})
 }

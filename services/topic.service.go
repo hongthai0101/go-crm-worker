@@ -22,7 +22,8 @@ func (s *TopicService) Send(topicName string, body interface{}, attributes map[s
 	projectID := config.GetConfig().GCSConfig.ProjectId
 	client, err := pubsub.NewClient(ctx, projectID)
 	if err != nil {
-
+		utils.Logger.Error(err)
+		return false
 	}
 	topic := client.Topic(topicName)
 
@@ -32,6 +33,7 @@ func (s *TopicService) Send(topicName string, body interface{}, attributes map[s
 		Attributes: attributes,
 	}
 	if _, err := topic.Publish(ctx, msg).Get(ctx); err != nil {
+		utils.Logger.Error(err)
 		return false
 	}
 	return true

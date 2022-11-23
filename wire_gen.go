@@ -16,9 +16,9 @@ import (
 // Injectors from wire.go:
 
 func initServer() *server.Server {
-	repository := repositories.NewRepository()
 	httpClient := clients.NewHttpClient()
+	repository := repositories.NewRepository()
 	service := services.NewService(httpClient, repository)
-	serverServer := server.NewServer(repository, httpClient, service)
+	serverServer := server.NewServer(service)
 	return serverServer
 }

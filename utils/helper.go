@@ -5,9 +5,11 @@ import (
 	"crypto/md5"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt"
 	"math/rand"
+	"regexp"
 	"time"
 )
 
@@ -22,22 +24,18 @@ func Contains(slice []string, item string) bool {
 }
 
 func ExtractClaims(tokenString string) (string, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-
-		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
-			return nil, fmt.Errorf("there's an error with the signing method")
-		}
-		return token, nil
-
-	})
-
-	return "Error Parsing Token: ", err
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if ok && token.Valid {
-		username := claims["username"].(string)
-		return username, nil
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+	if err != nil {
+		fmt.Printf("Error %s", err)
+		return "", err
 	}
-	return "unable to extract claims", nil
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok {
+		// obtains claims
+		sub := fmt.Sprint(claims["sub"])
+		return sub, nil
+	}
+	return "", errors.New("some thing went wrong")
 }
 
 func Random(min int, max int) int {
@@ -84,4 +82,14 @@ func Omit(input interface{}, fields []string) map[string]interface{} {
 	}
 
 	return output
+}
+
+func MaskStr(input string, startNo uint8, endNo int, maskChar string) string {
+	start := input[:startNo]
+	re := regexp.MustCompile(".")
+	mask := input[startNo : len(input)-endNo]
+	mask = re.ReplaceAllString(mask, maskChar)
+	end := input[endNo:]
+
+	return start + mask + end
 }

@@ -22,6 +22,7 @@ type ExportRequestData struct {
 }
 
 type IExportRequest struct {
+	ID         string            `json:"id"`
 	Type       string            `json:"type"`
 	Resource   string            `json:"resource"`
 	StoreCodes string            `json:"storeCodes"`
@@ -33,9 +34,9 @@ type IExportRequest struct {
 }
 
 type CreateFileRequest struct {
-	Url             string      `json:"url" :"url"`
-	Info            interface{} `json:"info" :"info"`
-	ExportRequestId string      `json:"exportRequestId" :"exportRequestId"`
+	Url             string      `json:"url"`
+	Info            interface{} `json:"info"`
+	ExportRequestId string      `json:"exportRequestId"`
 }
 
 type PayloadMessageExport struct {
@@ -57,10 +58,10 @@ type RequestOrder struct {
 	CustomerId   string `json:"customerId"`
 }
 
-type RequestMessageOrder struct {
-	Order    RequestOrder  `json:"order"`
-	Metadata interface{}   `json:"metadata"`
-	Images   []interface{} `json:"images"`
+type MessageOrderCreated struct {
+	Order    RequestOrder `json:"order"`
+	Metadata interface{}  `json:"metadata"`
+	Images   []string     `json:"images"`
 }
 
 type PayloadBorrowDisbursed struct {
@@ -69,7 +70,7 @@ type PayloadBorrowDisbursed struct {
 	ContractCode   string `json:"contractCode"`
 }
 
-type PayloadMessageDisbursed struct {
+type MessageOrderDisbursed struct {
 	SaleOppCode     string                  `json:"saleOppCode"`
 	LoanPackageCode string                  `json:"loanPackageCode"`
 	Lead            MessageDisbursedLead    `json:"lead"`

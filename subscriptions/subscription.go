@@ -32,7 +32,7 @@ func (s *Subscription) pullMessages(subscription *config.SubscriptionConfigItem)
 		ctx = context.Background()
 		client, err = pubsub.NewClient(ctx, projectID)
 		if err != nil {
-			fmt.Errorf("pubsub.NewClient: %v", err)
+			utils.Debug(err)
 		}
 	}
 
@@ -62,24 +62,22 @@ func (s *Subscription) pullMessages(subscription *config.SubscriptionConfigItem)
 		switch subscription.Action {
 		case "ExportCrm":
 			var payload = unmarshalMessage[types.PayloadMessageExport](msg)
-			isDone = s.exportService.ExportSaleOpp(payload)
+			isDone = s.exportService.ExportData(payload)
 			break
 		case "OrderCreated":
-			var payload = unmarshalMessage[types.RequestMessageOrder](msg)
-			isDone = s.saleService.ExecuteMessage(payload, msg.Attributes["source"])
+			var payload = unmarshalMessage[types.MessageOrderCreated](msg)
+			isDone = s.saleService.OrderCreated(payload, msg.Attributes["source"])
 			break
 		case "OrderDisbursed":
-			var payload = unmarshalMessage[types.RequestMessageOrder](msg)
-			isDone = s.saleService.ExecuteMessage(payload, msg.Attributes["source"])
+			var payload = unmarshalMessage[types.MessageOrderDisbursed](msg)
+			isDone = s.saleService.OrderDisbursed(payload)
 			break
 		}
-		println(isDone)
-		msg.Ack()
-		//if isDone {
-		//	msg.Ack()
-		//} else {
-		//	msg.Nack()
-		//}
+		if isDone {
+			msg.Ack()
+		} else {
+			msg.Nack()
+		}
 	})
 
 	if err != nil {
@@ -92,11 +90,11 @@ func (s *Subscription) pullMessages(subscription *config.SubscriptionConfigItem)
 }
 
 func (s *Subscription) Boot() {
-	//for _, item := range config.GetConfig().SubscriptionConfig {
-	//	if err = s.pullMessages(item); err != nil {
-	//		utils.Logger.Error(err)
-	//	}
-	//}
+	for _, item := range config.GetConfig().SubscriptionConfig {
+		if err = s.pullMessages(item); err != nil {
+			utils.Logger.Error(err)
+		}
+	}
 }
 
 func unmarshalMessage[T interface{}](msg *pubsub.Message) T {
