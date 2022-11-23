@@ -73,8 +73,7 @@ func (c *FileManagerClient) CreateFile(
 	}
 
 	req = req.WithContext(HttpCtx)
-	res := struct{}{}
-	if err = c.Client.sendRequest(req, &res); err != nil {
+	if err = c.Client.sendRequest(req, nil); err != nil {
 		utils.Logger.Error(err)
 		return err
 	}

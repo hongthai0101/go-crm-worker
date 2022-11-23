@@ -6,6 +6,7 @@ import (
 	"crm-worker-go/repositories"
 	"crm-worker-go/types"
 	"crm-worker-go/utils"
+	"fmt"
 	"github.com/xuri/excelize/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -203,27 +204,28 @@ func (s *ExportService) exportSaleOpp(payload *types.IExportRequest) bool {
 		},
 	}
 
-	number, numberWorker := len(results), 4
-	jobs, result := make(chan IJobs, number), make(chan []interface{}, number)
+	numberWorker := 4
+	jobs, result := make(chan IJobs, 100), make(chan []interface{}, 100)
 
-	wg.Add(4)
 	for i := 1; i <= numberWorker; i++ {
-		go worker(jobs, result)
-		wg.Done()
+		go worker(jobs, result, fmt.Sprintf("%d", i))
 	}
-	wg.Wait()
 
-	for _, sale := range results {
-		jobs <- IJobs{
-			sale:       sale,
-			items:      items,
-			masterData: masterData,
-			employees:  employees,
+	go func(results []*entities.SaleOpportunity) {
+		for i, sale := range results {
+			jobs <- IJobs{
+				sale:       sale,
+				items:      items,
+				masterData: masterData,
+				employees:  employees,
+			}
+			fmt.Printf("[JOB] ===>>> %d has been enqueued with sale code %v \n", i, sale.Code)
 		}
-	}
-	close(jobs)
+		close(jobs)
+	}(results)
 
-	for _, _ = range results {
+	for i := 0; i < len(results); i++ {
+		fmt.Printf("[STT] ===>>> %d has been export with sale code %v \n", i, results[i].Code)
 		exportData = append(exportData, <-result)
 	}
 
@@ -285,8 +287,9 @@ func (s *ExportService) exportLead(payload *types.IExportRequest) bool {
 	return true
 }
 
-func worker(jobs <-chan IJobs, results chan<- []interface{}) {
+func worker(jobs <-chan IJobs, results chan<- []interface{}, name string) {
 	for n := range jobs {
+		fmt.Printf("Worker %s is handle sale code %v\n", name, n.sale.Code)
 		results <- handleData(n)
 	}
 }
@@ -486,28 +489,27 @@ func (s *ExportService) saveFile(values [][]interface{}, exportRequestId string)
 			return nil
 		}
 
-		if err := f.SetSheetRow("Data", startCell, &row); err != nil {
+		if err = f.SetSheetRow("Sheet1", startCell, &row); err != nil {
 			utils.Logger.Error(err)
 			return nil
 		}
 	}
-
+	//if err := f.SaveAs("Book1.xlsx"); err != nil {
+	//	fmt.Println(err)
+	//}
 	file, _ := f.WriteToBuffer()
 	reader := io.Reader(file)
 	result, err := s.uploader.UploadFile(reader, exportRequestId+".xlsx")
 	if err != nil {
+		_ = s.fileManagerClient.UpdateExportRequestFailure(exportRequestId)
+		utils.Logger.Error(err)
 		return err
 	}
 
-	err = s.fileManagerClient.CreateFile(exportRequestId, result.Name, map[string]interface{}{
+	_ = s.fileManagerClient.CreateFile(exportRequestId, result.Name, map[string]interface{}{
 		"name": result.Name,
 		"type": result.ContentType,
 		"size": result.Size,
 	})
-
-	if err != nil {
-		_ = s.fileManagerClient.UpdateExportRequestFailure(exportRequestId)
-		return err
-	}
 	return nil
 }

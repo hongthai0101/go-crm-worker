@@ -36,12 +36,7 @@ func (s *Subscription) pullMessages(subscription *config.SubscriptionConfigItem)
 		}
 	}
 
-	defer func(client *pubsub.Client) {
-		err := client.Close()
-		if err != nil {
-
-		}
-	}(client)
+	defer client.Close()
 
 	sub := client.Subscription(subscription.Key)
 	// MaxOutstandingMessages is the maximum number of unprocessed messages the

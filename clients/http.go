@@ -31,31 +31,22 @@ type errorResponse struct {
 	Message string `json:"message"`
 }
 
-type successResponse struct {
-	Code int         `json:"code"`
-	Data interface{} `json:"data"`
-}
-
 var HttpCtx = context.Background()
 
 func (c *Client) sendRequest(req *http.Request, v interface{}) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json; charset=utf-8")
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Close = true
 
 	res, err := c.HTTPClient.Do(req)
 	if err != nil {
+		utils.Logger.Error(err)
 		return err
 	}
+	defer res.Body.Close()
 
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			fmt.Printf("%v", err.Error())
-		}
-	}(res.Body)
-
-	if res.StatusCode != http.StatusOK {
+	if !utils.ContainsInt([]int{http.StatusOK, http.StatusCreated, http.StatusNoContent}, res.StatusCode) {
 		bodyBytes, _ := io.ReadAll(res.Body)
 		utils.Debug(string(bodyBytes))
 		var errRes errorResponse
@@ -65,11 +56,8 @@ func (c *Client) sendRequest(req *http.Request, v interface{}) error {
 		return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
 	}
 
-	fullResponse := successResponse{
-		Code: res.StatusCode,
-		Data: v,
-	}
-	if err = json.NewDecoder(res.Body).Decode(&fullResponse.Data); err != nil {
+	if err = json.NewDecoder(res.Body).Decode(&v); err != nil {
+		utils.Debug(err)
 		return err
 	}
 	return nil

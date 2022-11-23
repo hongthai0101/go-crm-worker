@@ -23,6 +23,15 @@ func Contains(slice []string, item string) bool {
 	return ok
 }
 
+func ContainsInt(s []int, e int) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
+}
+
 func ExtractClaims(tokenString string) (string, error) {
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
