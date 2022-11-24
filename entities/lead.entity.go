@@ -1,6 +1,7 @@
 package entities
 
 import (
+	"crm-worker-go/types"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -21,7 +22,7 @@ type Lead struct {
 	Source     string             `bson:"source" json:"source,omitempty"`
 	EmployeeBy string             `bson:"employeeBy" json:"employeeBy,omitempty"`
 	StoreCode  string             `bson:"storeCode" json:"storeCode,omitempty"`
-	Type       string             `bson:"type" json:"type,omitempty"`
+	Type       types.SaleOppType  `bson:"type" json:"type,omitempty"`
 	Birthday   string             `bson:"birthday" json:"birthday,omitempty"`
 	Gender     string             `bson:"gender" json:"gender,omitempty"`
 	BaseEntity `bson:"inline"`

@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-	"crm-worker-go/config"
 	"crm-worker-go/datasources"
 	"crm-worker-go/entities"
 	"crm-worker-go/types"
@@ -19,7 +18,7 @@ type SaleOpportunityRepository struct {
 func NewSaleOpportunityRepository(ctx context.Context) *SaleOpportunityRepository {
 	return &SaleOpportunityRepository{
 		BaseRepo: &BaseRepository[entities.SaleOpportunity]{
-			col: datasources.MongoClient.Database(config.GetConfig().DB.Name).Collection(entities.CollectionSaleOpportunities),
+			col: datasources.MongoDatabase.Collection(entities.CollectionSaleOpportunities),
 			ctx: ctx,
 		},
 	}

@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-	"crm-worker-go/config"
 	"crm-worker-go/datasources"
 	"crm-worker-go/entities"
 )
@@ -14,7 +13,7 @@ type LeadRepository struct {
 func NewLeadRepository(ctx context.Context) *LeadRepository {
 	return &LeadRepository{
 		BaseRepo: &BaseRepository[entities.Lead]{
-			col: datasources.MongoClient.Database(config.GetConfig().DB.Name).Collection(entities.CollectionLead),
+			col: datasources.MongoDatabase.Collection(entities.CollectionLead),
 			ctx: ctx,
 		},
 	}

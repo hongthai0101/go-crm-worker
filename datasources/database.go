@@ -14,7 +14,8 @@ import (
 )
 
 var (
-	MongoClient *mongo.Client
+	MongoClient   *mongo.Client
+	MongoDatabase *mongo.Database
 )
 
 func ConnectDB() (*mongo.Client, context.Context, context.CancelFunc, error) {
@@ -49,6 +50,7 @@ func ConnectDB() (*mongo.Client, context.Context, context.CancelFunc, error) {
 		panic(err)
 	}
 	MongoClient = client
+	MongoDatabase = MongoClient.Database(config.GetConfig().DB.Name)
 	return client, ctx, cancel, err
 }
 

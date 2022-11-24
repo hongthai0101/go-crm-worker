@@ -1,6 +1,7 @@
 package entities
 
 import (
+	"crm-worker-go/types"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"time"
 )
@@ -30,10 +31,10 @@ type SaleOpportunity struct {
 	ID              primitive.ObjectID     `bson:"_id,omitempty" json:"id,omitempty"`
 	SourceRefs      SourceRefs             `bson:"source_refs" json:"source_refs"`
 	Code            string                 `bson:"code" json:"code,omitempty"`
-	Status          string                 `bson:"status" json:"status,omitempty"`
-	Type            string                 `bson:"type" json:"type,omitempty"`
+	Status          types.SaleOppStatus    `bson:"status" json:"status,omitempty"`
+	Type            types.SaleOppType      `bson:"type" json:"type,omitempty"`
 	Source          string                 `bson:"source" json:"source,omitempty"`
-	Group           string                 `bson:"group" json:"group,omitempty"`
+	Group           types.SaleOppGroup     `bson:"group" json:"group,omitempty"`
 	Assets          Asset                  `bson:"assets" json:"assets"`
 	EmployeeBy      string                 `bson:"employeeBy" json:"employeeBy,omitempty"`
 	StoreCode       string                 `bson:"storeCode" json:"storeCode,omitempty"`

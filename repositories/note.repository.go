@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-	"crm-worker-go/config"
 	"crm-worker-go/datasources"
 	"crm-worker-go/entities"
 )
@@ -14,7 +13,7 @@ type NoteRepository struct {
 func NewNoteRepository(ctx context.Context) *NoteRepository {
 	return &NoteRepository{
 		BaseRepo: &BaseRepository[entities.Note]{
-			col: datasources.MongoClient.Database(config.GetConfig().DB.Name).Collection(entities.CollectionNote),
+			col: datasources.MongoDatabase.Collection(entities.CollectionNote),
 			ctx: ctx,
 		},
 	}
